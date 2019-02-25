@@ -1,0 +1,12 @@
+.DS_Store
+.idea/
+__pycache__/
+data/
+test/
+log/
+out/
+ckpt/
+skip_thoughts/
+*.pdf
+*.log
+*.ckpt
