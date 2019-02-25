@@ -1,8 +1,9 @@
+from scipy import stats
 import numpy as np
-from sklearn.model_selection import cross_validate
+from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.linear_model import SGDClassifier
 from sklearn.svm import SVC, OneClassSVM, LinearSVC
-from sklearn.metrics import confusion_matrix, precision_recall_fscore_support, roc_auc_score, average_precision_score
+from sklearn.metrics import f1_score
 from sklearn.metrics.pairwise import chi2_kernel
 from sklearn.preprocessing import Normalizer, MinMaxScaler, StandardScaler
 from sklearn.ensemble import RandomForestClassifier
@@ -32,7 +33,7 @@ class Train(object):
         model_name = self.args.model
         print_to_log("The model used here is {0}".format(model_name))
         if model_name == 'sgd':
-            clf = SGDClassifier(max_iter=1000, tol=1e-3, loss='hinge', class_weight=class_weight, shuffle=self.args.shuffle)
+            clf = SGDClassifier(max_iter=1000, tol=1e-3, loss='hinge', class_weight=class_weight)
         elif model_name == 'svm_linear':
             clf = LinearSVC(class_weight=class_weight, dual=False)
         elif model_name == 'svm_rbf':
@@ -42,9 +43,19 @@ class Train(object):
         elif model_name == 'svm_chi2':
             clf = SVC(kernel=chi2_kernel, class_weight=class_weight)
         elif model_name == 'bernoulli_nb':
-            clf = BernoulliNB()
+            clf = BernoulliNB(alpha=0.0158, binarize=0.7317, fit_prior=False)
         elif model_name == 'rf':
-            clf = RandomForestClassifier()
+            rf_params = {
+                'n_estimators': 128,
+                "n_jobs": -1,
+                'class_weight': class_weight,
+                'criterion': 'gini',
+                'max_depth': 32,
+                'max_features': 113,
+                'min_samples_leaf': 2,
+                'min_samples_split': 54,
+            }
+            clf = RandomForestClassifier(**rf_params)
         else:
             raise NotImplementedError
         self.clf = clf
@@ -56,14 +67,53 @@ class Train(object):
         :return:
         """
         print_to_log('Use {} fold cross validation'.format(self.args.cv_num))
-        measure_score_name = ['accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'average_precision']
-        scores = cross_validate(self.clf, self.data_x, self.data_y, cv=self.args.cv_num, scoring=measure_score_name,
-                                return_train_score=True)  # n_jobs=-1
-        for it_name in measure_score_name:
-            score_list = scores['test_{}'.format(it_name)]
-            assert len(score_list) == self.args.cv_num
-            print_to_log('The {0} score in cross validation is {1}'.format(it_name, score_list))
-            print_to_log('The average {0} score is {1}'.format(it_name, sum(score_list) / len(score_list)))
+        skf = StratifiedKFold(n_splits=self.args.cv_num)
+        acc_list, f1_list = [], []
+        for train, test in skf.split(self.data_x, self.data_y):
+            X_train = self.data_x[train]
+            y_train = self.data_y[train]
+            X_test = self.data_x[test]
+            y_test = self.data_y[test]
+            self.clf.fit(X_train, y_train)
+            y_predict = self.clf.predict(X_test)
+            f1_list.append(f1_score(y_test, y_predict, average="macro"))
+            acc_list.append(self.clf.score(X_test, y_test))
+        print_to_log('The acc score in cross validation is {0}'.format(acc_list))
+        print_to_log('The average acc score is {0}'.format(np.mean(acc_list)))
+        print_to_log('The f1 score in cross validation is {0}'.format(f1_list))
+        print_to_log('The average f1 score is {0}'.format(np.mean(f1_list)))
 
+    def get_best_hyper_parameter(self, n_iter_search=100, r_state=1337):
+        if self.args.model == 'rf':
+            self.clf = RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=r_state)
+            # specify parameters and distributions to sample from
+            param_dist = {
+                "max_depth": [2, 4, 8, 16, 32, 64, 128, None],
+                "max_features": stats.randint(1, 512),
+                "min_samples_split": stats.randint(2, 512),
+                "min_samples_leaf": stats.randint(2, 512),
+                "criterion": ["gini", "entropy"],
+            }
+        elif self.args.model == 'bernoulli_nb':
+            self.clf = BernoulliNB()
+            param_dist = {
+                "alpha": stats.uniform(),
+                "binarize": stats.uniform(),
+                "fit_prior": [True, False],
+            }
+        else:
+            raise ValueError("The model {} is not implemented for random search".format(self.args.model))
+        return self._random_search(param_dist, n_iter_search=n_iter_search, r_state=r_state)
 
-
+    def _random_search(self, param_dist, n_iter_search=20, r_state=1337):
+        random_search = RandomizedSearchCV(self.clf,
+                                           param_distributions=param_dist,
+                                           n_iter=n_iter_search,
+                                           cv=10,
+                                           scoring="f1_macro",
+                                           random_state=r_state,
+                                           verbose=2,
+                                           n_jobs=-1,
+                                           )
+        random_search.fit(self.data_x, self.data_y)
+        return random_search.best_score_, random_search.best_params_

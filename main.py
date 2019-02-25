@@ -10,6 +10,13 @@ from train import Train
 from utils import print_to_log, set_logging
 import utils
 
+from nltk.tokenize import TweetTokenizer
+local_tokenizer = TweetTokenizer()
+
+
+def tokenizer_wrapper(text):
+    return local_tokenizer.tokenize(text)
+
 
 def main():
     args = get_arguments()
@@ -37,20 +44,22 @@ def main():
     print_to_log("Here is the arguments of this running:")
     print_to_log("{}".format(args))
 
-    # Preprocess
     label_file = os.path.join(args.data_dir, 'ITR-H.types.v2.json')
-    label2id = utils.get_label2id(label_file)
     tweet_file_list = [os.path.join(args.data_dir, '{}-tweets.txt'.format(it_name)) for it_name in ['train', 'test']]
+    train_file = os.path.join(args.data_dir, 'TRECIS-CTIT-H-Training.json')
+    test_file_list = [os.path.join(args.data_dir, 'assr{}.test'.format(i)) for i in range(7)]
+
+    # Preprocess
+    label2id = utils.get_label2id(label_file, train_file, args.cv_num)
     tweetid2content = utils.get_tweetid2content(tweet_file_list)
     preprocess = Preprocess(args, tweetid2content, label2id)
 
-    train_file = os.path.join(args.data_dir, 'TRECIS-CTIT-H-Training.json')
-    test_file_list = [os.path.join(args.data_dir, 'assr{}.test'.format(i)) for i in range(7)]
     preprocess.extract_train_data(train_file)
     data_x, data_y = preprocess.content_to_feature()
 
     # Train
     train = Train(args, data_x, data_y)
+    train.train()
 
 
 if __name__ == '__main__':

@@ -19,4 +19,11 @@ def get_arguments():
                         help="Directory contains the data")
     parser.add_argument("--log_name", type=str, default='defaultLog',
                         help="Name of logfile, could use Date such as Apr25")
+    # Model
+    parser.add_argument("--model", type=str, default='bernoulli_nb',
+                        help="bernoulli_nb | rf | sgd")
+    parser.add_argument("--no_class_weight", action='store_true',
+                        help="Not use different weights for each class")
+    parser.add_argument("--cv_num", type=int, default=5,
+                        help="The n-fold cross-validation")
     return parser.parse_args()

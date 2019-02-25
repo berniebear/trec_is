@@ -47,15 +47,32 @@ def set_logging(args):
     return logger
 
 
-def get_label2id(label_file):
-    label2id = dict()
+def get_label2id(label_file, train_file, threshold):
+    id2label = []
     with open(label_file, 'r', encoding='utf8') as f:
         content = json.load(f)
     for it_type in content['informationTypes']:
         label = it_type['id'].split('-')[1]
-        if label in label2id:
+        if label in id2label:
             raise ValueError("The label {0} duplicate in {1}".format(label, label_file))
-        label2id[label] = len(label2id)
+        id2label.append(label)
+    # Remove those rare labels
+    label_count = {label: 0 for label in id2label}
+    with open(train_file, 'r', encoding='utf8') as f:
+        train_file_content = json.load(f)
+        for event in train_file_content['events']:
+            for tweet in event['tweets']:
+                for tweet_label in tweet['categories']:
+                    label_count[tweet_label] += 1
+    print_to_log("All labels in {0} is: {1}".format(label_file, id2label))
+    removed_labels = []
+    label2id = dict()
+    for label in id2label:
+        if label_count[label] < threshold:
+            removed_labels.append(label)
+        else:
+            label2id[label] = len(label2id)
+    print_to_log("With threshold {0}, those labels are filtered out: {1}".format(threshold, removed_labels))
     return label2id
 
 
@@ -103,8 +120,9 @@ def extract_by_skip_thought(args, sent_list):
 def extract_by_tfidf(texts: list):
     from sklearn.externals import joblib
     from sklearn.feature_extraction.text import TfidfVectorizer
+
     vectorizer = joblib.load('../data/2013to2016_tfidf_vectorizer_20190109.pkl')
-    return vectorizer.transform(texts)
+    return vectorizer.transform(texts).toarray()
 
 
 def extract_hand_crafted_feature(content_list: list):
@@ -137,7 +155,11 @@ def extract_hand_crafted_feature(content_list: list):
         words = tweet_tokenizer.tokenize(text)
 
         feat_name2val = dict()
-        feat_name2val['sentiment'] = sentiment_analyzer.polarity_scores(text)
+        sentiment = sentiment_analyzer.polarity_scores(text)
+        feat_name2val['sentiment_pos'] = sentiment['pos']
+        feat_name2val['sentiment_neg'] = sentiment['neg']
+        feat_name2val['sentiment_neu'] = sentiment['neu']
+        feat_name2val['sentiment_compound'] = sentiment['compound']
         feat_name2val['num_chars'] = sum(len(w) for w in words)
         feat_name2val['num_chars_total'] = len(text)
         feat_name2val['num_terms'] = len(text.split())
@@ -147,8 +169,9 @@ def extract_hand_crafted_feature(content_list: list):
         feat_name2val['caps_ratio'] = feat_name2val['caps_count'] / feat_name2val['num_chars_total']
         feat_name2val['has_place'] = 1 if "coordinates" in content else 0
         feat_name2val['is_verified'] = 1 if content['user']["verified"] else 0
-        for feat_name in ['sentiment', 'num_chars', 'num_chars_total', 'num_terms', 'num_words', 'num_unique_terms',
-                          'caps_count', 'caps_ratio', 'has_place', 'is_verified']:
+        for feat_name in ['sentiment_pos', 'sentiment_neg', 'sentiment_neu', 'sentiment_compound', 'num_chars',
+                          'num_chars_total', 'num_terms', 'num_words', 'num_unique_terms', 'caps_count', 'caps_ratio',
+                          'has_place', 'is_verified']:
             current_feature.append(feat_name2val[feat_name])
 
         feature_list.append(current_feature)
