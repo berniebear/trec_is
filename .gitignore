@@ -7,6 +7,8 @@ log/
 out/
 ckpt/
 skip_thoughts/
+eval/*.txt
+eval/.ipynb_checkpoints
 *.pdf
 *.log
 *.ckpt

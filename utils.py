@@ -6,6 +6,7 @@ import json
 import numpy as np
 
 # For processing tweets
+from sklearn.feature_extraction.text import TfidfVectorizer
 import preprocessor as p
 import nltk
 from nltk.stem import PorterStemmer
@@ -47,16 +48,32 @@ def set_logging(args):
     return logger
 
 
+def extract_feature(content_list: list, vectorizer: TfidfVectorizer):
+    hand_crafted_feature, clean_texts = extract_hand_crafted_feature(content_list)
+    tfidf_feature = extract_by_tfidf(clean_texts, vectorizer)
+    # fasttext_feature = utils.extract_by_fasttext(clean_texts)
+    # skip_thought_feature = utils.extract_by_skip_thought(clean_texts)
+    # bert_feature = utils.extract_by_bert(clean_texts)
+    print_to_log("The shape of hand_crafted_feature is {}".format(hand_crafted_feature.shape))
+    print_to_log("The shape of tfidf_feature is {}".format(tfidf_feature.shape))
+    data_x = np.concatenate([hand_crafted_feature, tfidf_feature], axis=1)
+    return data_x
+
+
 def get_label2id(label_file, train_file, threshold):
     id2label = []
+    short2long_label = dict()
     with open(label_file, 'r', encoding='utf8') as f:
         content = json.load(f)
     for it_type in content['informationTypes']:
-        label = it_type['id'].split('-')[1]
+        long_label = it_type['id']
+        label = long_label.split('-')[1]
+        short2long_label[label] = long_label
         if label in id2label:
             raise ValueError("The label {0} duplicate in {1}".format(label, label_file))
         id2label.append(label)
-    # Remove those rare labels
+
+    # Count label frequency
     label_count = {label: 0 for label in id2label}
     with open(train_file, 'r', encoding='utf8') as f:
         train_file_content = json.load(f)
@@ -65,6 +82,16 @@ def get_label2id(label_file, train_file, threshold):
                 for tweet_label in tweet['categories']:
                     label_count[tweet_label] += 1
     print_to_log("All labels in {0} is: {1}".format(label_file, id2label))
+
+    # Get the majority label
+    majority_label = id2label[0]
+    max_count = label_count[majority_label]
+    for label in id2label:
+        if label_count[label] > max_count:
+            majority_label = label
+            max_count = label_count[label]
+
+    # Remove those rare labels
     removed_labels = []
     label2id = dict()
     for label in id2label:
@@ -73,7 +100,14 @@ def get_label2id(label_file, train_file, threshold):
         else:
             label2id[label] = len(label2id)
     print_to_log("With threshold {0}, those labels are filtered out: {1}".format(threshold, removed_labels))
-    return label2id
+    return label2id, majority_label, short2long_label
+
+
+def get_id2label(label2id: dict):
+    id2label = [''] * len(label2id)
+    for label, idx in label2id.items():
+        id2label[idx] = label
+    return id2label
 
 
 def get_tweetid2content(tweet_file_list):
@@ -117,11 +151,7 @@ def extract_by_skip_thought(args, sent_list):
     return encoding_list
 
 
-def extract_by_tfidf(texts: list):
-    from sklearn.externals import joblib
-    from sklearn.feature_extraction.text import TfidfVectorizer
-
-    vectorizer = joblib.load('../data/2013to2016_tfidf_vectorizer_20190109.pkl')
+def extract_by_tfidf(texts: list, vectorizer: TfidfVectorizer):
     return vectorizer.transform(texts).toarray()
 
 
@@ -246,5 +276,18 @@ def extract_test_ids_to_file():
     fout.close()
 
 
+def gzip_compress_file(filepath):
+    """
+    Gzip the file for evaluartion. Remove the former gz file if it exists
+    :param filepath:
+    :return:
+    """
+    import subprocess
+    former_file = filepath + '.gz'
+    if os.path.isfile(former_file):
+        os.remove(former_file)
+    subprocess.run(["gzip", filepath])
+
+
 if __name__ == '__main__':
-    extract_test_ids_to_file()
+    gzip_compress_file(os.path.join('out', 'test.txt'))

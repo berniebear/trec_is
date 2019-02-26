@@ -4,9 +4,9 @@ import argparse
 
 def get_arguments():
     parser = argparse.ArgumentParser()
-    # test mode
-    parser.add_argument("--test", action='store_true',
-                        help="Use small data set to run")
+    # sanity check
+    parser.add_argument("--sanity_check", action='store_true',
+                        help="Use small data set to run for sanity check")
     # reproducibility
     parser.add_argument("--random_seed", type=int, default=9,
                         help="Random seed (>0, set a specific seed).")

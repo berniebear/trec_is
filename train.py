@@ -1,8 +1,9 @@
 from scipy import stats
 import numpy as np
+import pandas as pd
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.linear_model import SGDClassifier
-from sklearn.svm import SVC, OneClassSVM, LinearSVC
+from sklearn.svm import SVC, LinearSVC
 from sklearn.metrics import f1_score
 from sklearn.metrics.pairwise import chi2_kernel
 from sklearn.preprocessing import Normalizer, MinMaxScaler, StandardScaler
@@ -24,6 +25,37 @@ class Train(object):
         self._shuffle_data()
         self._create_model()
         self._cross_validate()
+
+    def predict(self, data_x: np.ndarray, tweetid_list: list, tweetid2idx: list, tweetid2incident: dict,
+                id2label: list, short2long_label: dict, majority_label: str, out_file: str):
+        """
+        For those missed tweetid (that cannot be found in twitter API), we use the majority label as the prediction res.
+        As we can see in the evaluation script, the rank filed doesn't matter.
+        Todo: Currently we only care about the category prediction, and we don't care about the score, but we need
+        :param data_x: Feature of data
+        :param tweetid_list:
+        :param tweetid2idx: Can find the actuall idx of this tweetid in data_x
+        :param tweetid2incident:
+        :param id2label:
+        :param short2long_label: the output format need the long label in the form of A-B
+        :param majority_label:
+        :param out_file:
+        :return:
+        """
+        fout = open(out_file, 'w', encoding='utf8')
+        predict_res = self.clf.predict(data_x)
+        count_label = []
+        for tweetid in tweetid_list:
+            incident = tweetid2incident[tweetid]
+            label = id2label[predict_res[tweetid2idx[tweetid]]] if tweetid in tweetid2idx else majority_label
+            label = short2long_label[label]
+            fout.write("{0}\tQ0\t{1}\t1\t1.0\t{2}\tmyrun\n".format(incident, tweetid, label))
+            count_label.append({"tweet_id": tweetid, "label": label})
+        fout.close()
+        df = pd.DataFrame(count_label)
+        print_to_log("{} rows have been replaced due to missing of tweetid".format(len(tweetid_list) - len(tweetid2idx)))
+        print_to_log("The count of different labels in prediction results:\n{}".format(df.groupby("label").count()))
+        print_to_log("The prediction file has been written to {}".format(out_file))
 
     def _shuffle_data(self):
         self.data_x, self.data_y = shuffle(self.data_x, self.data_y)
