@@ -65,7 +65,7 @@ Train: 1,335 instances, including 6 events
 Test: 22,216 instances, including 15 events
 
 Notice that some tweets are not accessible due to the suspend of the account
-- There are 
+- There are 96 such tweets in train, and 1263 in test
 
 ## Get Twitter according to IDs
 These datasets will be distributed as a list of tweet identifiers for each incident. Participants will
@@ -112,6 +112,7 @@ Information Type Accuracy (any valid type, micro): 0.335877476748888
 ```
 
 ## Todo
+- Cope with the unaccessible tweets, maybe can use the file provided by the host instead of getting from twitter API.
 - Add more features (fasttext, combine word2vec with tfidf, BERT)
 - Add feature for each event
 - Use a better method to predict the importance score
