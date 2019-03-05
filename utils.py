@@ -7,6 +7,7 @@ import numpy as np
 
 # For processing tweets
 from sklearn.feature_extraction.text import TfidfVectorizer
+from gensim.models.fasttext import FastText
 import preprocessor as p
 import nltk
 from nltk.stem import PorterStemmer
@@ -48,15 +49,18 @@ def set_logging(args):
     return logger
 
 
-def extract_feature(content_list: list, vectorizer: TfidfVectorizer):
+def extract_feature(content_list: list, tfidf_vectorizer: TfidfVectorizer, fasttext_vectorizer: FastText):
+    analyzer = tfidf_vectorizer.build_analyzer()
     hand_crafted_feature, clean_texts = extract_hand_crafted_feature(content_list)
-    tfidf_feature = extract_by_tfidf(clean_texts, vectorizer)
-    # fasttext_feature = utils.extract_by_fasttext(clean_texts)
+    tfidf_feature = extract_by_tfidf(clean_texts, tfidf_vectorizer)
+    fasttext_feature = extract_by_fasttext(clean_texts, fasttext_vectorizer, analyzer)
     # skip_thought_feature = utils.extract_by_skip_thought(clean_texts)
     # bert_feature = utils.extract_by_bert(clean_texts)
     print_to_log("The shape of hand_crafted_feature is {}".format(hand_crafted_feature.shape))
     print_to_log("The shape of tfidf_feature is {}".format(tfidf_feature.shape))
-    data_x = np.concatenate([hand_crafted_feature, tfidf_feature], axis=1)
+    print_to_log("The shape of fasttext_feature is {}".format(fasttext_feature.shape))
+    # All those features are [sent_num, feature_dim] size
+    data_x = np.concatenate([hand_crafted_feature, tfidf_feature, fasttext_feature], axis=1)
     return data_x
 
 
@@ -153,6 +157,30 @@ def extract_by_skip_thought(args, sent_list):
 
 def extract_by_tfidf(texts: list, vectorizer: TfidfVectorizer):
     return vectorizer.transform(texts).toarray()
+
+
+def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer):
+    feature_list = []
+    count_miss = 0
+    for sentence in texts:
+        tokenized = [normalize_for_fasttext(t) for t in analyzer(sentence)]
+        wvs = []
+        for t in tokenized:
+            try:
+                token_vec = vectorizer.wv[t]
+                # norm = np.linalg.norm(token_vec)
+                # normed_token_vec = token_vec / norm
+                wvs.append(token_vec)
+            except KeyError:
+                wvs.append(np.zeros([vectorizer.vector_size], dtype=np.float32))
+                count_miss += 1
+        if len(wvs) == 0:
+            sentence_vec = np.zeros([vectorizer.vector_size])
+        else:
+            sentence_vec = np.mean(np.asarray(wvs), axis=0)
+        feature_list.append(sentence_vec)
+    print_to_log("There are {} words missed by the fasttext model".format(count_miss))
+    return np.asarray(feature_list)
 
 
 def extract_hand_crafted_feature(content_list: list):
@@ -288,6 +316,29 @@ def gzip_compress_file(filepath):
         os.remove(former_file)
     subprocess.run(["gzip", filepath])
 
+
+def normalize_for_fasttext(s):
+    """
+    Given a text, cleans and normalizes it. Feel free to add your own stuff.
+    From: https://www.kaggle.com/mschumacher/using-fasttext-models-for-robust-embeddings
+    """
+    s = s.lower()
+
+    # Replace numbers and symbols with language
+    s = s.replace('&', ' and ')
+    s = s.replace('@', ' at ')
+    s = s.replace('0', 'zero')
+    s = s.replace('1', 'one')
+    s = s.replace('2', 'two')
+    s = s.replace('3', 'three')
+    s = s.replace('4', 'four')
+    s = s.replace('5', 'five')
+    s = s.replace('6', 'six')
+    s = s.replace('7', 'seven')
+    s = s.replace('8', 'eight')
+    s = s.replace('9', 'nine')
+
+    return s
 
 if __name__ == '__main__':
     gzip_compress_file(os.path.join('out', 'test.txt'))

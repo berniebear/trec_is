@@ -42,7 +42,7 @@ def main():
 
     # Set the file contains data for training and test
     label_file = os.path.join(args.data_dir, 'ITR-H.types.v2.json')
-    tweet_file_list = [os.path.join(args.data_dir, '{}-tweets.txt'.format(it_name)) for it_name in ['train', 'test']]
+    tweet_file_list = [os.path.join(args.data_dir, 'tweets-content-merged.txt')]
     train_file = os.path.join(args.data_dir, 'TRECIS-CTIT-H-Training.json')
     test_file = os.path.join(args.data_dir, 'TRECIS-CTIT-H-Test.tweetids.tsv')
     test_label_file_list = [os.path.join(args.data_dir, 'TRECIS-2018-TestEvents-Labels', 'assr{}.test'.format(i)) for i in range(1, 7)]

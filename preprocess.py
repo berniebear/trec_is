@@ -1,4 +1,4 @@
-import os
+import string
 import json
 import numpy as np
 from sklearn.externals import joblib
@@ -13,7 +13,8 @@ class Preprocess(object):
         self.label2id = label2id
         self.train_tweet = []
         self.train_label = []
-        self.vectorizer = self._get_tfidf_vectorizer()
+        self.tfidf_vectorizer = self._get_tfidf_vectorizer()
+        self.fasttext_vectorizer = self._get_fasttext_vectorizer()
 
     def _get_tfidf_vectorizer(self):
         if self.args.sanity_check:
@@ -24,6 +25,19 @@ class Preprocess(object):
         else:
             vectorizer = joblib.load('../data/2013to2016_tfidf_vectorizer_20190109.pkl')
         return vectorizer
+
+    def _get_fasttext_vectorizer(self):
+        from gensim.models.fasttext import FastText
+
+        if self.args.sanity_check:
+            fasttext = FastText(size=10, min_count=1, window=1)
+            cleaned_text = ['This is a test document', 'This is just used for testing', string.ascii_lowercase]
+            fasttext.build_vocab(cleaned_text)
+            fasttext.train(cleaned_text, total_examples=fasttext.corpus_count, epochs=fasttext.epochs)
+            return fasttext
+        else:
+            fasttext = FastText.load('../data/text_sample_2013to2016_gensim_200.model')
+            return fasttext
 
     def remove_all_data(self):
         self.train_tweet = []
@@ -50,7 +64,7 @@ class Preprocess(object):
                 miss_tweetid.append(tweetid)
         utils.print_to_log("There are {0}/{1} tweets cannot find for {2}".format(
             len(miss_tweetid), len(tweetid_list), test_file))
-        test_data_x = utils.extract_feature(test_content, self.vectorizer)
+        test_data_x = utils.extract_feature(test_content, self.tfidf_vectorizer, self.fasttext_vectorizer)
         utils.print_to_log("The shape of data_x is {0}".format(test_data_x.shape))
         return test_data_x, tweetid_list, tweetid2idx, tweetid2incident
 
@@ -61,10 +75,12 @@ class Preprocess(object):
         :return:
         """
         count_miss = 0
+        count_total = 0
         with open(train_file, 'r', encoding='utf8') as f:
             train_file_content = json.load(f)
             for event in train_file_content['events']:
                 for tweet in event['tweets']:
+                    count_total += 1
                     if tweet['postID'] in self.tweetid2content:
                         tweet_content = self.tweetid2content[tweet['postID']]
                         for tweet_label in tweet['categories']:
@@ -74,7 +90,7 @@ class Preprocess(object):
                             self.train_label.append(self.label2id[tweet_label])
                     else:
                         count_miss += 1
-        utils.print_to_log("There are {0} tweets cannot find for {1}".format(count_miss, train_file))
+        utils.print_to_log("There are {0}/{1} tweets cannot find for {2}".format(count_miss, count_total, train_file))
 
     def content_to_feature(self):
         """
@@ -82,7 +98,7 @@ class Preprocess(object):
             which could be used in other feature extractor. And notice that here the text contains uppercase
         :return:
         """
-        data_x = utils.extract_feature(self.train_tweet, self.vectorizer)
+        data_x = utils.extract_feature(self.train_tweet, self.tfidf_vectorizer, self.fasttext_vectorizer)
         data_y = np.asarray(self.train_label, dtype=np.int32)
         utils.print_to_log("The shape of data_x is {0}, data_y is {1}".format(data_x.shape, data_y.shape))
         utils.print_to_log("The number of each label is {}".format({i: sum(data_y == i) for i in range(len(self.label2id))}))

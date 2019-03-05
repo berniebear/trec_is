@@ -9,6 +9,10 @@ TensorFlow, scikit-learn
 
 As we don't have sudo on server, we use conda to manage all packages.
 
+### How to Run
+```bash
+python3 main.py
+```
 
 ## Task Description
 
@@ -99,23 +103,29 @@ Read and write (Access level)
 ```
 
 ## Current Result
+Baseline
 ```bash
-Information Type Precision (positive class, multi-type, macro): 0.18630789182513743
-Information Type Recall (positive class, multi-type, macro): 0.08473317660637916
-Information Type F1 (positive class, multi-type, macro): 0.1031639919206761
-Information Type Accuracy (overall, multi-type, macro): 0.8991002830570157
-Priority Estimation Error (mean squared error, macro): 0.09434289369225503
 Information Type Precision (any valid type, micro): 0.3874517740813358
 Information Type Recall (any valid type, micro): 0.6394572025052192
 Information Type F1 (any valid type, micro): 0.48253318104840304
 Information Type Accuracy (any valid type, micro): 0.335877476748888
 ```
+Add fasttext
+```bash
+Information Type Precision (any valid type, micro): 0.3881616391576551
+Information Type Recall (any valid type, micro): 0.6402419943673725
+Information Type F1 (any valid type, micro): 0.4833070866141733
+Information Type Accuracy (any valid type, micro): 0.3366356651839871
+```
 
 ## Todo
-- Cope with the unaccessible tweets, maybe can use the file provided by the host instead of getting from twitter API.
+- Check the correctness of get_clean_tweet in utils
+- Change java version to 1.8 and cope with the unaccessible tweets, maybe can use the file provided by the host instead of getting from twitter API.
 - Add more features (fasttext, combine word2vec with tfidf, BERT)
-- Add feature for each event
+- Add feature for each event (the type/title/narr tag in the event)
 - Use a better method to predict the importance score
+- Use generative model, try to model the joint distribution of p(x,y) and can extract the feature to feed into the descriptive model (similar to ELMo)
+- Borrow idea from Twitter Sentiment Analysis (including pre-processing methods)
 
 ## Reference
 
