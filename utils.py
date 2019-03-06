@@ -4,6 +4,7 @@ import pickle
 import logging
 import json
 import numpy as np
+from scipy.sparse import csr_matrix
 
 # For processing tweets
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -53,14 +54,17 @@ def extract_feature(content_list: list, tfidf_vectorizer: TfidfVectorizer, fastt
     analyzer = tfidf_vectorizer.build_analyzer()
     hand_crafted_feature, clean_texts = extract_hand_crafted_feature(content_list)
     tfidf_feature = extract_by_tfidf(clean_texts, tfidf_vectorizer)
-    fasttext_feature = extract_by_fasttext(clean_texts, fasttext_vectorizer, analyzer)
-    # skip_thought_feature = utils.extract_by_skip_thought(clean_texts)
-    # bert_feature = utils.extract_by_bert(clean_texts)
+    fasttext_feature = extract_by_fasttext(clean_texts, fasttext_vectorizer, analyzer,
+                                           tfidf_feature, tfidf_vectorizer.get_feature_names())
+    del tfidf_feature
+    skip_thought_feature = extract_by_skip_thought(clean_texts)
+    bert_feature = extract_by_bert(clean_texts)
     print_to_log("The shape of hand_crafted_feature is {}".format(hand_crafted_feature.shape))
-    print_to_log("The shape of tfidf_feature is {}".format(tfidf_feature.shape))
     print_to_log("The shape of fasttext_feature is {}".format(fasttext_feature.shape))
+    print_to_log("The shape of skip_thought_feature is {}".format(skip_thought_feature.shape))
+    print_to_log("The shape of bert_feature is {}".format(bert_feature.shape))
     # All those features are [sent_num, feature_dim] size
-    data_x = np.concatenate([hand_crafted_feature, tfidf_feature, fasttext_feature], axis=1)
+    data_x = np.concatenate([hand_crafted_feature, fasttext_feature, skip_thought_feature], axis=1)
     return data_x
 
 
@@ -125,13 +129,21 @@ def get_tweetid2content(tweet_file_list):
     return tweetid2content
 
 
-def extract_by_skip_thought(args, sent_list):
+def extract_by_bert(sent_list: list):
+    """
+    https://github.com/google-research/bert#using-bert-to-extract-fixed-feature-vectors-like-elmo
+    :param sent_list:
+    :return:
+    """
+    
+
+def extract_by_skip_thought(sent_list: list):
     """
     To make it compatible with the toolkit, we need the input to be a list of sentences
     :param sent_list:
     :return:
     """
-    skip_thought_dir = os.path.join(args.data_dir, 'skipThoughts', 'pretrained', 'skip_thoughts_uni_2017_02_02')
+    skip_thought_dir = os.path.join('../data', 'skipThoughts', 'pretrained', 'skip_thoughts_uni_2017_02_02')
     # Set paths to the model.
     VOCAB_FILE = os.path.join(skip_thought_dir, "vocab.txt")
     EMBEDDING_MATRIX_FILE = os.path.join(skip_thought_dir, "embeddings.npy")
@@ -155,12 +167,24 @@ def extract_by_skip_thought(args, sent_list):
     return encoding_list
 
 
-def extract_by_tfidf(texts: list, vectorizer: TfidfVectorizer):
-    return vectorizer.transform(texts).toarray()
+def extract_by_tfidf(texts: list, vectorizer: TfidfVectorizer) -> csr_matrix:
+    return vectorizer.transform(texts)
 
 
-def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer):
-    feature_list = []
+def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer, tfidf_feature: csr_matrix, tfidf_vocab: list):
+    """
+    We get two kinds of fasttext features here, the first is the simple average,
+        the other is weighted sum according to tfidf score.
+    tfidf_feature is [sent_num, vocab_size], and by the fasttext we can get feature for the vocab [vocab_size, embed_dim]
+    Then we can use [sent_num, vocab_size] * [vocab_size, embed_dim] to get a weighted sum of [sent_num, embed_dim] feature
+    :param texts:
+    :param vectorizer:
+    :param analyzer:
+    :param tfidf_feature:
+    :return:
+    """
+    # Get the simple average feature
+    avg_feature = []
     count_miss = 0
     for sentence in texts:
         tokenized = [normalize_for_fasttext(t) for t in analyzer(sentence)]
@@ -178,9 +202,26 @@ def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer):
             sentence_vec = np.zeros([vectorizer.vector_size])
         else:
             sentence_vec = np.mean(np.asarray(wvs), axis=0)
-        feature_list.append(sentence_vec)
-    print_to_log("There are {} words missed by the fasttext model".format(count_miss))
-    return np.asarray(feature_list)
+        avg_feature.append(sentence_vec)
+    avg_feature = np.asarray(avg_feature)  # [sent_num, embed_dim]
+    assert len(avg_feature.shape) == 2, "The shape of avg_feature is {}, which is wrong".format(avg_feature.shape)
+    print_to_log("There are {} words missed by the fasttext model in tweets".format(count_miss))
+
+    # Get the weighted sum feature by tf-idf score
+    count_miss = 0
+    fasttext_for_vocab = []
+    for word in tfidf_vocab:
+        try:
+            fasttext_vec = vectorizer.wv[word]
+        except KeyError:
+            fasttext_vec = np.zeros([vectorizer.vector_size], dtype=np.float32)
+            count_miss += 1
+        fasttext_for_vocab.append(fasttext_vec)
+    fasttext_for_vocab = np.asarray(fasttext_for_vocab)
+    weighted_sum_feature = tfidf_feature.dot(fasttext_for_vocab)
+    print_to_log("There are {0}/{1} words missed by the fasttext model in tfidf vocab".format(count_miss, tfidf_feature.shape[1]))
+
+    return np.concatenate([avg_feature, weighted_sum_feature], axis=-1)
 
 
 def extract_hand_crafted_feature(content_list: list):
