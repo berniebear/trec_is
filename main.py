@@ -53,6 +53,7 @@ def main():
     label2id, majority_label, short2long_label = utils.get_label2id(label_file, train_file, args.cv_num)
     id2label = utils.get_id2label(label2id)
     tweetid2content = utils.get_tweetid2content(tweet_file_list)
+    # utils.write_tweet_and_ids(tweetid2content)  # This line is used for generating files for BERT
     preprocess = Preprocess(args, tweetid2content, label2id)
 
     preprocess.extract_train_data(train_file)

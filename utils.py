@@ -50,6 +50,23 @@ def set_logging(args):
     return logger
 
 
+def write_list_to_file(target_list: list, outfile):
+    with open(outfile, 'w', encoding='utf8') as f:
+        for line in target_list:
+            f.write(line + '\n')
+
+
+def write_tweet_and_ids(tweetid2content: dict):
+    content_list = []
+    id_list = []
+    for tweetid, content in tweetid2content.items():
+        content_list.append(content)
+        id_list.append(tweetid)
+    _, clean_texts = extract_hand_crafted_feature(content_list)
+    write_list_to_file(clean_texts, 'out/tweets-clean-text.txt')
+    write_list_to_file(id_list, 'out/tweets-id.txt')
+
+
 def extract_feature(content_list: list, tfidf_vectorizer: TfidfVectorizer, fasttext_vectorizer: FastText):
     analyzer = tfidf_vectorizer.build_analyzer()
     hand_crafted_feature, clean_texts = extract_hand_crafted_feature(content_list)
@@ -132,6 +149,8 @@ def get_tweetid2content(tweet_file_list):
 def extract_by_bert(sent_list: list):
     """
     https://github.com/google-research/bert#using-bert-to-extract-fixed-feature-vectors-like-elmo
+    We first store all sentences to a file, and then use the BERT API to store the result json to a file.
+    Then read that json file and process it to get the vector of this.
     :param sent_list:
     :return:
     """
@@ -296,6 +315,10 @@ def get_clean_tweet(tweet: str, enities_info: dict):
     indices_txt = sorted(indices_txt, key=lambda x: x[0], reverse=True)
     for start_idx, end_idx, txt in indices_txt:
         tweet = tweet[: start_idx] + txt + tweet[end_idx:]
+    # Some url is part of the content
+    url_regex = ('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|'
+                 '[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
+    tweet = re.sub(url_regex, '', tweet)
     # Remove continuous space
     space_pattern = '\s+'
     tweet = re.sub(space_pattern, ' ', tweet)
@@ -381,5 +404,26 @@ def normalize_for_fasttext(s):
 
     return s
 
+
+def find_true_relevant(event_id='bostonBombings2013'):
+    for filepath in ['data/TRECIS-2018-TestEvents-Labels/assr{}.test'.format(i) for i in range(1, 7)]:
+        with open(filepath, 'r', encoding='utf8') as f:
+            content = json.load(f)
+            event_in = False
+            for event_info in content['annotator']['eventsAnnotated']:
+                if event_id == event_info['identifier']:
+                    event_in = True
+                    break
+            if not event_in:
+                continue
+            for event in content['events']:
+                if event['eventid'] != event_id:
+                    continue
+                for tweet in event['tweets']:
+                    if 'PastNews' in tweet['categories'] or 'Irrelevant' in tweet['categories']:
+                        continue
+                    print("{0}    {1}".format(tweet['postID'], tweet['categories']))
+
+
 if __name__ == '__main__':
-    gzip_compress_file(os.path.join('out', 'test.txt'))
+    find_true_relevant()
