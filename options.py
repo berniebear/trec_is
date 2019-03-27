@@ -19,6 +19,8 @@ def get_arguments():
                         help="Directory contains the data")
     parser.add_argument("--log_name", type=str, default='defaultLog',
                         help="Name of logfile, could use Date such as Apr25")
+    # Features
+    parser.add_argument("--fasttext_merge", type=str, default='avg', help='avg | weighted')
     # Model
     parser.add_argument("--model", type=str, default='bernoulli_nb',
                         help="bernoulli_nb | rf | sgd")

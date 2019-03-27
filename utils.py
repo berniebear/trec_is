@@ -3,24 +3,19 @@ import re
 import pickle
 import logging
 import json
+from typing import List, Dict
 import numpy as np
 from scipy.sparse import csr_matrix
 
 # For processing tweets
 from sklearn.feature_extraction.text import TfidfVectorizer
 from gensim.models.fasttext import FastText
-import preprocessor as p
-import nltk
 from nltk.stem import PorterStemmer
 from nltk.tokenize import TweetTokenizer
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 porter = PorterStemmer()
 tweet_tokenizer = TweetTokenizer()
 sentiment_analyzer = SentimentIntensityAnalyzer()
-
-from skip_thoughts import configuration
-from skip_thoughts import encoder_manager
-
 
 logger = logging.getLogger()
 
@@ -56,36 +51,38 @@ def write_list_to_file(target_list: list, outfile):
             f.write(line + '\n')
 
 
-def write_tweet_and_ids(tweetid2content: dict):
-    content_list = []
-    id_list = []
-    for tweetid, content in tweetid2content.items():
-        content_list.append(content)
-        id_list.append(tweetid)
-    _, clean_texts = extract_hand_crafted_feature(content_list)
-    write_list_to_file(clean_texts, 'out/tweets-clean-text.txt')
-    write_list_to_file(id_list, 'out/tweets-id.txt')
+def write_tweet_and_ids(tweetid_list: List[str], tweet_content_list: List[dict],
+                        tweet_text_out_file: str, tweet_id_out_file: str):
+    """
+    Write all tweetids as well as contents to files, which is prepared for external feature extraction (such as BERT)
+    :param tweetid_list:
+    :param tweet_content_list
+    :param tweet_text_out_file:
+    :param tweet_id_out_file:
+    :return:
+    """
+    clean_texts = []
+    for content in tweet_content_list:
+        entities = content['entities']
+        clean_text = get_clean_tweet(content['full_text'], entities)
+        clean_texts.append(clean_text)
+    write_list_to_file(clean_texts, tweet_text_out_file)
+    write_list_to_file(tweetid_list, tweet_id_out_file)
+    print("The tweet text and ids has been written to {0} and {1}".format(tweet_text_out_file, tweet_id_out_file))
 
 
-def extract_feature(content_list: list, tfidf_vectorizer: TfidfVectorizer, fasttext_vectorizer: FastText):
-    analyzer = tfidf_vectorizer.build_analyzer()
-    hand_crafted_feature, clean_texts = extract_hand_crafted_feature(content_list)
-    tfidf_feature = extract_by_tfidf(clean_texts, tfidf_vectorizer)
-    fasttext_feature = extract_by_fasttext(clean_texts, fasttext_vectorizer, analyzer,
-                                           tfidf_feature, tfidf_vectorizer.get_feature_names())
-    del tfidf_feature
-    skip_thought_feature = extract_by_skip_thought(clean_texts)
-    bert_feature = extract_by_bert(clean_texts)
-    print_to_log("The shape of hand_crafted_feature is {}".format(hand_crafted_feature.shape))
-    print_to_log("The shape of fasttext_feature is {}".format(fasttext_feature.shape))
-    print_to_log("The shape of skip_thought_feature is {}".format(skip_thought_feature.shape))
-    print_to_log("The shape of bert_feature is {}".format(bert_feature.shape))
-    # All those features are [sent_num, feature_dim] size
-    data_x = np.concatenate([hand_crafted_feature, fasttext_feature, skip_thought_feature], axis=1)
-    return data_x
-
-
-def get_label2id(label_file, train_file, threshold):
+def get_label2id(label_file: str, train_file: str, threshold: int):
+    """
+    Because the original labels are in the form of text, such as "MultimediaShare" and so on
+    We want to convert those textual labels to digital labels
+    :param label_file:
+    :param train_file:
+    :param threshold:
+    :return:
+        label2id: the dict to convert labels to id
+        majority_label: the majority label, used when the tweet contents cannot be accessed
+        short2long_label: for submission we need to predict the long label (MultimediaShare -> Report-MultimediaShare)
+    """
     id2label = []
     short2long_label = dict()
     with open(label_file, 'r', encoding='utf8') as f:
@@ -135,62 +132,90 @@ def get_id2label(label2id: dict):
     return id2label
 
 
-def get_tweetid2content(tweet_file_list):
-    tweetid2content = dict()
+def get_tweetid_content(tweet_file_list: List[str]) -> (List[str], List[dict]):
+    """
+    Read the train and test tweets file to form a large set of tweetid along with its content
+    :param tweet_file_list:
+    :return:
+    """
+    tweetid_list = []
+    tweet_content_list = []
     for filename in tweet_file_list:
         with open(filename, 'r', encoding='utf8') as f:
             for line in f:
                 content = json.loads(line.strip())
                 tweetid = content['id_str']
-                tweetid2content[tweetid] = content
-    return tweetid2content
+                tweetid_list.append(tweetid)
+                tweet_content_list.append(content)
+    return tweetid_list, tweet_content_list
 
 
-def extract_by_bert(sent_list: list):
+def extract_feature_by_dict(tweetid_list: List[str], tweetid2vec: Dict[str, List[float]], feat_name: str):
     """
-    https://github.com/google-research/bert#using-bert-to-extract-fixed-feature-vectors-like-elmo
-    We first store all sentences to a file, and then use the BERT API to store the result json to a file.
-    Then read that json file and process it to get the vector of this.
-    :param sent_list:
+    :param tweetid_list:
+    :param tweetid2bertvec:
     :return:
     """
-    
+    res = []
+    tweetid2bertvec_iter = iter(tweetid2vec)
+    bert_dim = len(tweetid2vec[next(tweetid2bertvec_iter)])
+    miss_num = 0
+    for tweetid in tweetid_list:
+        if tweetid in tweetid2vec:
+            res.append(tweetid2vec[tweetid])
+        else:
+            res.append([0.0] * bert_dim)
+            miss_num += 1
+    print_to_log("There are {0}/{1} missed by {2} features".format(miss_num, len(tweetid_list), feat_name))
+    return res
 
-def extract_by_skip_thought(sent_list: list):
+
+def get_tweetid2vec(tweetid_file: str, vec_file: str, feat_name: str) -> Dict[str, List[float]]:
     """
-    To make it compatible with the toolkit, we need the input to be a list of sentences
-    :param sent_list:
+    The file of tweets content is args.tweet_text_out_file
+    The file of corresponding feature vector (such as bert or skip-thought) is vec_file
+    The file of tweets id is tweetid_file
+    :param tweetid_file:
+    :param vec_file:
+    :param feat_name:
     :return:
     """
-    skip_thought_dir = os.path.join('../data', 'skipThoughts', 'pretrained', 'skip_thoughts_uni_2017_02_02')
-    # Set paths to the model.
-    VOCAB_FILE = os.path.join(skip_thought_dir, "vocab.txt")
-    EMBEDDING_MATRIX_FILE = os.path.join(skip_thought_dir, "embeddings.npy")
-    CHECKPOINT_PATH = os.path.join(skip_thought_dir, "model.ckpt-501424")
-    # The following directory should contain files rt-polarity.neg and
-    # rt-polarity.pos.
-    # MR_DATA_DIR = "/dir/containing/mr/data"
+    if feat_name == 'bert':
+        return get_tweetid2bertvec(tweetid_file, vec_file)
 
-    # Set up the encoder. Here we are using a single unidirectional model.
-    # To use a bidirectional model as well, call load_model() again with
-    # configuration.model_config(bidirectional_encoder=True) and paths to the
-    # bidirectional model's files. The encoder will use the concatenation of
-    # all loaded models.
-    encoder = encoder_manager.EncoderManager()
-    encoder.load_model(configuration.model_config(),
-                       vocabulary_file=VOCAB_FILE,
-                       embedding_matrix_file=EMBEDDING_MATRIX_FILE,
-                       checkpoint_path=CHECKPOINT_PATH)
+    tweetid2vec = dict()
+    tweetid_list = []
+    with open(tweetid_file, 'r', encoding='utf8') as f:
+        for i, line in enumerate(f):
+            tweetid = line.strip()
+            tweetid_list.append(tweetid)
+    with open(vec_file, 'r', encoding='utf8') as f:
+        for i, line in enumerate(f):
+            tweetid2vec[tweetid_list[i]] = json.loads(line.strip())
+    return tweetid2vec
 
-    encoding_list = encoder.encode(sent_list)
-    return encoding_list
+
+def get_tweetid2bertvec(tweetid_file: str, bert_vec_file: str) -> Dict[str, List[float]]:
+    tweetid2bertvec = dict()
+    tweetid_list = []
+    with open(tweetid_file, 'r', encoding='utf8') as f:
+        for i, line in enumerate(f):
+            tweetid = line.strip()
+            tweetid_list.append(tweetid)
+    with open(bert_vec_file, 'r', encoding='utf8') as f:
+        for i, line in enumerate(f):
+            content = json.loads(line.strip())
+            bertvec = content['features']['-1']
+            tweetid2bertvec[tweetid_list[i]] = bertvec
+    return tweetid2bertvec
 
 
 def extract_by_tfidf(texts: list, vectorizer: TfidfVectorizer) -> csr_matrix:
     return vectorizer.transform(texts)
 
 
-def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer, tfidf_feature: csr_matrix, tfidf_vocab: list):
+def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer,
+                        tfidf_feature: csr_matrix, tfidf_vocab: list, merge: str='avg'):
     """
     We get two kinds of fasttext features here, the first is the simple average,
         the other is weighted sum according to tfidf score.
@@ -200,50 +225,58 @@ def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer, tfidf_featu
     :param vectorizer:
     :param analyzer:
     :param tfidf_feature:
+    :param tfidf_vocab:
+    :param merge: The type of merge for tokens to get sentence feature. 'avg' means average merging,
+            'weighted' means weighted sum according to tf-idf weight
     :return:
     """
-    # Get the simple average feature
-    avg_feature = []
-    count_miss = 0
-    for sentence in texts:
-        tokenized = [normalize_for_fasttext(t) for t in analyzer(sentence)]
-        wvs = []
-        for t in tokenized:
+    if merge == 'avg':
+        # Get the simple average feature
+        avg_feature = []
+        count_miss = 0
+        for sentence in texts:
+            tokenized = [normalize_for_fasttext(t) for t in analyzer(sentence)]
+            wvs = []
+            for t in tokenized:
+                try:
+                    token_vec = vectorizer.wv[t]
+                    # norm = np.linalg.norm(token_vec)
+                    # normed_token_vec = token_vec / norm
+                    wvs.append(token_vec)
+                except KeyError:
+                    wvs.append(np.zeros([vectorizer.vector_size], dtype=np.float32))
+                    count_miss += 1
+            if len(wvs) == 0:
+                sentence_vec = np.zeros([vectorizer.vector_size])
+            else:
+                sentence_vec = np.mean(np.asarray(wvs), axis=0)
+            avg_feature.append(sentence_vec)
+        fasttext_feature = np.asarray(avg_feature)  # [sent_num, embed_dim]
+        assert len(fasttext_feature.shape) == 2, "The shape of avg_feature is {}, which is wrong".format(fasttext_feature.shape)
+        print_to_log("There are {} words missed by the fasttext model in tweets".format(count_miss))
+
+    elif merge == 'weighted':
+        # Get the weighted sum feature by tf-idf score
+        count_miss = 0
+        fasttext_for_vocab = []
+        for word in tfidf_vocab:
             try:
-                token_vec = vectorizer.wv[t]
-                # norm = np.linalg.norm(token_vec)
-                # normed_token_vec = token_vec / norm
-                wvs.append(token_vec)
+                fasttext_vec = vectorizer.wv[word]
             except KeyError:
-                wvs.append(np.zeros([vectorizer.vector_size], dtype=np.float32))
+                fasttext_vec = np.zeros([vectorizer.vector_size], dtype=np.float32)
                 count_miss += 1
-        if len(wvs) == 0:
-            sentence_vec = np.zeros([vectorizer.vector_size])
-        else:
-            sentence_vec = np.mean(np.asarray(wvs), axis=0)
-        avg_feature.append(sentence_vec)
-    avg_feature = np.asarray(avg_feature)  # [sent_num, embed_dim]
-    assert len(avg_feature.shape) == 2, "The shape of avg_feature is {}, which is wrong".format(avg_feature.shape)
-    print_to_log("There are {} words missed by the fasttext model in tweets".format(count_miss))
+            fasttext_for_vocab.append(fasttext_vec)
+        fasttext_for_vocab = np.asarray(fasttext_for_vocab)
+        fasttext_feature = tfidf_feature.dot(fasttext_for_vocab)
+        print_to_log("There are {0}/{1} words missed by the fasttext model in tfidf vocab".format(count_miss, tfidf_feature.shape[1]))
 
-    # Get the weighted sum feature by tf-idf score
-    count_miss = 0
-    fasttext_for_vocab = []
-    for word in tfidf_vocab:
-        try:
-            fasttext_vec = vectorizer.wv[word]
-        except KeyError:
-            fasttext_vec = np.zeros([vectorizer.vector_size], dtype=np.float32)
-            count_miss += 1
-        fasttext_for_vocab.append(fasttext_vec)
-    fasttext_for_vocab = np.asarray(fasttext_for_vocab)
-    weighted_sum_feature = tfidf_feature.dot(fasttext_for_vocab)
-    print_to_log("There are {0}/{1} words missed by the fasttext model in tfidf vocab".format(count_miss, tfidf_feature.shape[1]))
+    else:
+        raise ValueError("The value of merge {} is invalid".format(merge))
 
-    return np.concatenate([avg_feature, weighted_sum_feature], axis=-1)
+    return fasttext_feature
 
 
-def extract_hand_crafted_feature(content_list: list):
+def extract_hand_crafted_feature(content_list: list) -> (np.ndarray, List[str]):
     """
     Part of the features are taken from Davidson et al.
     This function takes a string and returns a list of features.

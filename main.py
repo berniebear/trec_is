@@ -49,17 +49,22 @@ def main():
     test_label_file_list = [os.path.join(args.data_dir, 'TRECIS-2018-TestEvents-Labels', 'assr{}.test'.format(i)) for i in range(1, 7)]
     predict_file = os.path.join(args.out_dir, "predict.txt")
 
+    args.tweet_text_out_file = tweet_text_out_file = os.path.join(args.out_dir, 'tweets-clean-text.txt')
+    args.tweet_id_out_file = tweet_id_out_file = os.path.join(args.out_dir, 'tweets-id.txt')
+    args.skipthought_vec_file = os.path.join(args.out_dir, 'skip-thought-vec.json')
+    args.bert_vec_file = os.path.join(args.out_dir, 'bert-vec.json')
+
     # Step1. Preprocess
     label2id, majority_label, short2long_label = utils.get_label2id(label_file, train_file, args.cv_num)
     id2label = utils.get_id2label(label2id)
-    tweetid2content = utils.get_tweetid2content(tweet_file_list)
-    # utils.write_tweet_and_ids(tweetid2content)  # This line is used for generating files for BERT
-    preprocess = Preprocess(args, tweetid2content, label2id)
-
-    preprocess.extract_train_data(train_file)
-    data_x, data_y = preprocess.content_to_feature()
+    tweetid_list, tweet_content_list = utils.get_tweetid_content(tweet_file_list)
+    if not (os.path.isfile(tweet_text_out_file) and os.path.isfile(tweet_id_out_file)):
+        utils.write_tweet_and_ids(tweetid_list, tweet_content_list, tweet_text_out_file, tweet_id_out_file)
+    preprocess = Preprocess(args, tweetid_list, tweet_content_list, label2id)
+    preprocess.extract_features()
 
     # Step2. Train
+    data_x, data_y = preprocess.extract_train_data(train_file)
     train = Train(args, data_x, data_y)
     train.train()
 
