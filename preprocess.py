@@ -33,19 +33,20 @@ class Preprocess(object):
                                                      self.args.fasttext_merge)
         del tfidf_feature
 
-        # tweetid2skip_vec = utils.get_tweetid2vec(self.args.tweet_id_out_file,
-        #                                          self.args.skipthought_vec_file, 'skip-thought')
-        # skipthought_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2skip_vec, 'skip-thought')
-        # tweetid2bertvec = utils.get_tweetid2vec(self.args.tweet_id_out_file, self.args.bert_vec_file, 'bert')
-        # bert_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2bertvec, 'bert')
+        tweetid2skip_vec = utils.get_tweetid2vec(self.args.tweet_id_out_file,
+                                                 self.args.skipthought_vec_file, 'skip-thought')
+        skipthought_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2skip_vec, 'skip-thought')
+        tweetid2bertvec = utils.get_tweetid2vec(self.args.tweet_id_out_file, self.args.bert_vec_file, 'bert')
+        bert_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2bertvec, 'bert')
 
         utils.print_to_log("The shape of hand_crafted_feature is {}".format(hand_crafted_feature.shape))
         utils.print_to_log("The shape of fasttext_feature is {}".format(fasttext_feature.shape))
         # utils.print_to_log("The shape of skip_thought_feature is {}".format(skip_thought_feature.shape))
-        # utils.print_to_log("The shape of bert_feature is {}".format(bert_feature.shape))
+        utils.print_to_log("The shape of bert_feature is {}".format(bert_feature.shape))
 
         # Concatenate all features
-        whole_feature_matrix = np.concatenate([hand_crafted_feature, fasttext_feature], axis=-1)
+        whole_feature_matrix = np.concatenate([hand_crafted_feature, fasttext_feature,
+                                               bert_feature, skipthought_feature], axis=-1)
         assert len(self.tweetid_list) == whole_feature_matrix.shape[0]
         for i, tweetid in enumerate(self.tweetid_list):
             self.tweetid2feature[tweetid] = whole_feature_matrix[i]

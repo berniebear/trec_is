@@ -150,10 +150,11 @@ def get_tweetid_content(tweet_file_list: List[str]) -> (List[str], List[dict]):
     return tweetid_list, tweet_content_list
 
 
-def extract_feature_by_dict(tweetid_list: List[str], tweetid2vec: Dict[str, List[float]], feat_name: str):
+def extract_feature_by_dict(tweetid_list: List[str], tweetid2vec: Dict[str, List[float]], feat_name: str) -> np.ndarray:
     """
     :param tweetid_list:
-    :param tweetid2bertvec:
+    :param tweetid2vec:
+    :param feat_name:
     :return:
     """
     res = []
@@ -167,7 +168,7 @@ def extract_feature_by_dict(tweetid_list: List[str], tweetid2vec: Dict[str, List
             res.append([0.0] * bert_dim)
             miss_num += 1
     print_to_log("There are {0}/{1} missed by {2} features".format(miss_num, len(tweetid_list), feat_name))
-    return res
+    return np.asarray(res)
 
 
 def get_tweetid2vec(tweetid_file: str, vec_file: str, feat_name: str) -> Dict[str, List[float]]:
@@ -182,17 +183,19 @@ def get_tweetid2vec(tweetid_file: str, vec_file: str, feat_name: str) -> Dict[st
     """
     if feat_name == 'bert':
         return get_tweetid2bertvec(tweetid_file, vec_file)
-
-    tweetid2vec = dict()
-    tweetid_list = []
-    with open(tweetid_file, 'r', encoding='utf8') as f:
-        for i, line in enumerate(f):
-            tweetid = line.strip()
-            tweetid_list.append(tweetid)
-    with open(vec_file, 'r', encoding='utf8') as f:
-        for i, line in enumerate(f):
-            tweetid2vec[tweetid_list[i]] = json.loads(line.strip())
-    return tweetid2vec
+    elif feat_name == 'skip-thought':
+        return get_tweetid2skipthought_vec(tweetid_file, vec_file)
+    else:
+        tweetid2vec = dict()
+        tweetid_list = []
+        with open(tweetid_file, 'r', encoding='utf8') as f:
+            for i, line in enumerate(f):
+                tweetid = line.strip()
+                tweetid_list.append(tweetid)
+        with open(vec_file, 'r', encoding='utf8') as f:
+            for i, line in enumerate(f):
+                tweetid2vec[tweetid_list[i]] = json.loads(line.strip())
+        return tweetid2vec
 
 
 def get_tweetid2bertvec(tweetid_file: str, bert_vec_file: str) -> Dict[str, List[float]]:
@@ -208,6 +211,23 @@ def get_tweetid2bertvec(tweetid_file: str, bert_vec_file: str) -> Dict[str, List
             bertvec = content['features']['-1']
             tweetid2bertvec[tweetid_list[i]] = bertvec
     return tweetid2bertvec
+
+
+def get_tweetid2skipthought_vec(tweetid_file: str, skipthought_vec_file: str) -> Dict[str, List[float]]:
+    """
+    Here the skip thought use .npy format to store the vectors
+    :param tweetid_file:
+    :param skipthought_vec_file:
+    :return:
+    """
+    tweetid2skipthought_vec = dict()
+    feat_vectors = np.load(skipthought_vec_file)
+
+    with open(tweetid_file, 'r', encoding='utf8') as f:
+        for i, line in enumerate(f):
+            tweetid = line.strip()
+            tweetid2skipthought_vec[tweetid] = feat_vectors[i].tolist()
+    return tweetid2skipthought_vec
 
 
 def extract_by_tfidf(texts: list, vectorizer: TfidfVectorizer) -> csr_matrix:

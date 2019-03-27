@@ -1,4 +1,6 @@
+import os
 import argparse
+import numpy as np
 from typing import List
 
 from skip_thoughts import configuration
@@ -21,7 +23,7 @@ def extract_by_skip_thought(sent_list: List[str]):
     :param sent_list:
     :return:
     """
-    skip_thought_dir = os.path.join('../data', 'skipThoughts', 'pretrained', 'skip_thoughts_uni_2017_02_02')
+    skip_thought_dir = os.path.join('/home/junpeiz/Project/Twitter/data', 'skipThoughts', 'pretrained', 'skip_thoughts_uni_2017_02_02')
     # Set paths to the model.
     VOCAB_FILE = os.path.join(skip_thought_dir, "vocab.txt")
     EMBEDDING_MATRIX_FILE = os.path.join(skip_thought_dir, "embeddings.npy")
@@ -49,15 +51,19 @@ def main():
     args = get_arguments()
 
     sent_list = []
+    empty_sent = total_sent = 0
     with open(args.input_file, 'r', encoding='utf8') as f:
         for line in f:
-            sent_list.append(line.strip())
-    vector_list = extract_by_skip_thought(sent_list)
+            total_sent += 1
+            line = line.strip()
+            if len(line) == 0:
+                line = '<PAD>'
+                empty_sent += 1
+            sent_list.append(line)
+    print("There are {0}/{1} empty lines in {2}".format(empty_sent, total_sent, args.input_file))
+    vectors = extract_by_skip_thought(sent_list)
 
-    with open(args.output_file, 'w', encoding='utf8') as f:
-        for vector in vector_list:
-            f.write('{}\n'.format(vector))
-
+    np.save(args.output_file, vectors)
     print("The feature vectors has been written to {}".format(args.output_file))
 
 
