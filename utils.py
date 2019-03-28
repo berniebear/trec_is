@@ -235,7 +235,7 @@ def extract_by_tfidf(texts: list, vectorizer: TfidfVectorizer) -> csr_matrix:
 
 
 def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer,
-                        tfidf_feature: csr_matrix, tfidf_vocab: list, merge: str='avg'):
+                        tfidf_feature: csr_matrix, tfidf_vocab: list, merge: str = 'avg'):
     """
     We get two kinds of fasttext features here, the first is the simple average,
         the other is weighted sum according to tfidf score.
@@ -338,7 +338,7 @@ def extract_hand_crafted_feature(content_list: list) -> (np.ndarray, List[str]):
         feat_name2val['num_unique_terms'] = len(set([x.lower() for x in words]))
         feat_name2val['caps_count'] = sum([1 if x.isupper() else 0 for x in text])
         feat_name2val['caps_ratio'] = feat_name2val['caps_count'] / feat_name2val['num_chars_total']
-        feat_name2val['has_place'] = 1 if "coordinates" in content else 0
+        feat_name2val['has_place'] = 1 if "coordinates" in content and content['coordinates'] is not None else 0
         feat_name2val['is_verified'] = 1 if content['user']["verified"] else 0
         for feat_name in ['sentiment_pos', 'sentiment_neg', 'sentiment_neu', 'sentiment_compound', 'num_chars',
                           'num_chars_total', 'num_terms', 'num_words', 'num_unique_terms', 'caps_count', 'caps_ratio',

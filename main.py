@@ -42,15 +42,17 @@ def main():
 
     # Set the file contains data for training and test
     label_file = os.path.join(args.data_dir, 'ITR-H.types.v2.json')
-    # tweet_file_list = [os.path.join(args.data_dir, 'tweets-content-merged.txt')]  # Tweets got by TREC jar API
-    tweet_file_list = [os.path.join(args.data_dir, '{}-tweets.txt'.format(part)) for part in ['train', 'test']]
+    if args.use_tweets_by_API:
+        tweet_file_list = [os.path.join(args.data_dir, '{}-tweets.txt'.format(part)) for part in ['train', 'test']]
+    else:
+        tweet_file_list = [os.path.join(args.data_dir, 'all-tweets.txt')]  # Tweets got by TREC jar API
     train_file = os.path.join(args.data_dir, 'TRECIS-CTIT-H-Training.json')
     test_file = os.path.join(args.data_dir, 'TRECIS-CTIT-H-Test.tweetids.tsv')
     test_label_file_list = [os.path.join(args.data_dir, 'TRECIS-2018-TestEvents-Labels', 'assr{}.test'.format(i)) for i in range(1, 7)]
     predict_file = os.path.join(args.out_dir, "predict.txt")
 
-    args.tweet_text_out_file = tweet_text_out_file = os.path.join(args.out_dir, 'tweets-clean-text.txt')
-    args.tweet_id_out_file = tweet_id_out_file = os.path.join(args.out_dir, 'tweets-id.txt')
+    args.tweet_text_out_file = os.path.join(args.out_dir, 'tweets-clean-text.txt')
+    args.tweet_id_out_file = os.path.join(args.out_dir, 'tweets-id.txt')
     args.skipthought_vec_file = os.path.join(args.out_dir, 'skip-thought-vec.npy')
     args.bert_vec_file = os.path.join(args.out_dir, 'bert-vec.json')
 
@@ -58,8 +60,8 @@ def main():
     label2id, majority_label, short2long_label = utils.get_label2id(label_file, train_file, args.cv_num)
     id2label = utils.get_id2label(label2id)
     tweetid_list, tweet_content_list = utils.get_tweetid_content(tweet_file_list)
-    if not (os.path.isfile(tweet_text_out_file) and os.path.isfile(tweet_id_out_file)):
-        utils.write_tweet_and_ids(tweetid_list, tweet_content_list, tweet_text_out_file, tweet_id_out_file)
+    if not (os.path.isfile(args.tweet_text_out_file) and os.path.isfile(args.tweet_id_out_file)):
+        utils.write_tweet_and_ids(tweetid_list, tweet_content_list, args.tweet_text_out_file, args.tweet_id_out_file)
     preprocess = Preprocess(args, tweetid_list, tweet_content_list, label2id)
     preprocess.extract_features()
 

@@ -41,7 +41,7 @@ class Preprocess(object):
 
         utils.print_to_log("The shape of hand_crafted_feature is {}".format(hand_crafted_feature.shape))
         utils.print_to_log("The shape of fasttext_feature is {}".format(fasttext_feature.shape))
-        # utils.print_to_log("The shape of skip_thought_feature is {}".format(skip_thought_feature.shape))
+        utils.print_to_log("The shape of skip_thought_feature is {}".format(skipthought_feature.shape))
         utils.print_to_log("The shape of bert_feature is {}".format(bert_feature.shape))
 
         # Concatenate all features

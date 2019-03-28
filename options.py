@@ -19,6 +19,8 @@ def get_arguments():
                         help="Directory contains the data")
     parser.add_argument("--log_name", type=str, default='defaultLog',
                         help="Name of logfile, could use Date such as Apr25")
+    parser.add_argument("--use_tweets_by_API", action='store_true',
+                        help="Use the tweets file gotten by Twitter Developper API, instead of using the jar file")
     # Features
     parser.add_argument("--fasttext_merge", type=str, default='avg', help='avg | weighted')
     # Model

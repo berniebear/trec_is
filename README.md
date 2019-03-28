@@ -104,14 +104,15 @@ Read and write (Access level)
 
 ## Current Result
 Baseline
-```bash
+```
 Information Type Precision (any valid type, micro): 0.3874517740813358
 Information Type Recall (any valid type, micro): 0.6394572025052192
 Information Type F1 (any valid type, micro): 0.48253318104840304
 Information Type Accuracy (any valid type, micro): 0.335877476748888
 ```
+
 Add fasttext (avg)
-```bash
+```
 Information Type Precision (any valid type, micro): 0.4057043435033866
 Information Type Recall (any valid type, micro): 0.6691606026442554
 Information Type F1 (any valid type, micro): 0.5051450676982592
@@ -119,7 +120,6 @@ Information Type Accuracy (any valid type, micro): 0.3534169025475131
 ```
 
 Add BERT
-
 ```
 Information Type Precision (any valid type, micro): 0.4143519950510362
 Information Type Recall (any valid type, micro): 0.6791725816264449
@@ -127,7 +127,15 @@ Information Type F1 (any valid type, micro): 0.5146962769431743
 Information Type Accuracy (any valid type, micro): 0.3615547917509098
 ```
 
-Currently rank 10/40 in 2018 leaderboard 
+Add skip-thought
+```
+Information Type Precision (any valid type, micro): 0.4264414748824548
+Information Type Recall (any valid type, micro): 0.6896448224112056
+Information Type F1 (any valid type, micro): 0.527007913146527
+Information Type Accuracy (any valid type, micro): 0.37459563283461383
+```
+
+Currently rank 9/40 in 2018 leaderboard 
 
 ## Todo
 

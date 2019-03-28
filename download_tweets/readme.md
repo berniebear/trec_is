@@ -3,12 +3,12 @@ Here we pick up the second method, which is downloading the archived tweets cont
 
 You can download the jar file from the [official website](http://dcs.gla.ac.uk/~richardm/TREC_IS/2018/2018TestDataset.html)
 Then run the script
+
 ```bash
 bash download_tweets.sh
 ```
-Notice there are two lines in this bash script, one for downloading the training tweets, and the other is used for the testing tweets.
+Notice the jar file has been modified this year, and it will automatically download all topics in test/train as the .gz file, which you need to uncompress manually.
 
-After downloading finished, there will be fifteen files, and each of them contains tweets for a type of event.
-We can use the `merge_tweets.py` in this folder to merge them and convert them to the same format as the official API.
+Then, we can use the `merge_tweets.py` in this folder to merge them and convert them to the same format as the official API.
 
 

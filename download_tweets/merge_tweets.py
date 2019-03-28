@@ -2,7 +2,33 @@ import os
 import json
 
 
-def merge_tweets():
+def merge_tweets_v2():
+    """
+    For merging tweets downloaded by TREC-IS-Client-v2.jar
+    :return:
+    """
+    formatted_tweet_list = []
+    for filename in os.listdir('.'):
+        if filename.endswith(".json"):
+            with open(filename, 'r', encoding='utf8') as f:
+                for line in f:
+                    content = json.loads(line)
+                    formatted_content = json.loads(content['allProperties']['srcjson'])
+                    formatted_content['full_text'] = formatted_content['text']
+                    formatted_tweet_list.append(formatted_content)
+
+    outfile = '../data/all-tweets.txt'
+    with open(outfile, 'w', encoding='utf8') as fout:
+        for tweet in formatted_tweet_list:
+            fout.write(json.dumps(tweet) + '\n')
+
+
+def merge_tweets_v1():
+    """
+    It is used for merging the tweets downloaded by TREC-IS jar v1 version.
+    However, as they update the jar file for 2019, and the format of the data is changed, so this function is deprecated
+    :return:
+    """
     formatted_tweet_list = []
     for filename in os.listdir('.'):
         if filename.endswith(".json"):
@@ -39,6 +65,10 @@ def merge_tweets():
 
 
 def count_total_line():
+    """
+    To count all lines in all json files downloaded by the jar file, if it is smaller than 25886, it should be wrong
+    :return:
+    """
     count = 0
     file_count = 0
     for filename in os.listdir('.'):
@@ -51,4 +81,4 @@ def count_total_line():
 
 
 if __name__ == '__main__':
-    count_total_line()
+    merge_tweets_v2()
