@@ -129,13 +129,21 @@ Information Type Accuracy (any valid type, micro): 0.3615547917509098
 
 Add skip-thought
 ```
-Information Type Precision (any valid type, micro): 0.4264414748824548
-Information Type Recall (any valid type, micro): 0.6896448224112056
-Information Type F1 (any valid type, micro): 0.527007913146527
-Information Type Accuracy (any valid type, micro): 0.37459563283461383
+Information Type Precision (any valid type, micro): 0.42567274976801733
+Information Type Recall (any valid type, micro): 0.6886509207365893
+Information Type F1 (any valid type, micro): 0.5261306724777306
+Information Type Accuracy (any valid type, micro): 0.3734836231298019
 ```
 
-Currently rank 9/40 in 2018 leaderboard 
+Change to data got by jar (less tweets missing)
+```
+Information Type Precision (any valid type, micro): 0.43939964832956546
+Information Type Recall (any valid type, micro): 0.681371116953939
+Information Type F1 (any valid type, micro): 0.5342648799297522
+Information Type Accuracy (any valid type, micro): 0.38339061868176305
+```
+
+Currently rank 8/40 in 2018 leaderboard 
 
 ## Todo
 
