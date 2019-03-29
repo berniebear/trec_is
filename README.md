@@ -146,14 +146,34 @@ Information Type Accuracy (any valid type, micro): 0.38339061868176305
 Currently rank 8/40 in 2018 leaderboard 
 
 ## Todo
-
-- Check the correctness of get_clean_tweet in utils
-- Change java version to 1.8 and cope with the unaccessible tweets, maybe can use the file provided by the host instead of getting from twitter API.
-- Add more features (fasttext, combine word2vec with tfidf, BERT)
 - Add feature for each event (the type/title/narr tag in the event)
 - Use a better method to predict the importance score
 - Use generative model, try to model the joint distribution of p(x,y) and can extract the feature to feed into the descriptive model (similar to ELMo)
 - Borrow idea from Twitter Sentiment Analysis (including pre-processing methods)
+- Suggested by Xin: augment interest profile with calling Google API. By the way, remember to deduplicate the tweets (removing tweets of retweet and very similar tweets).
+- Relationship between events (domain adaption/shift)
+
+### Mar29 Discussion
+
+Junpei:
+- Multitask: use the hashtag as the label and try to predict it.
+- Check with host if additional data could be used
+- Late fusion (train model and then average)
+- A classifier to classify event
+- Event-wise model
+- Cross-validation to see if it is comparable
+- To see if the addtional data is helpful (if data is noisy)
+
+Xinyu:
+- News extract feature
+- Explore the data to see if the number of images is large enough and useful
+- If data timestep
+- Natural Disaster Dataset
+
+Bernie:
+- Get AWS for this project
+- Check the correctness of get_clean_tweet in utils
+- Classifier part
 
 ## Reference
 
