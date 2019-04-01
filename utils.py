@@ -45,6 +45,37 @@ def set_logging(args):
     return logger
 
 
+def formalize_train_file(origin_train_file: str, formalized_train_file: str):
+    fout = open(formalized_train_file, 'w', encoding='utf8')
+    formalize_helper(origin_train_file, fout)
+    fout.close()
+
+
+def formalize_test_file(origin_test_files: List[str], formalized_test_file: str):
+    fout = open(formalized_test_file, 'w', encoding='utf8')
+    for test_file in origin_test_files:
+        formalize_helper(test_file, fout)
+    fout.close()
+
+
+def formalize_helper(filename, fout):
+    with open(filename, 'r', encoding='utf8') as f:
+        train_file_content = json.load(f)
+        for event in train_file_content['events']:
+            for tweet in event['tweets']:
+                tweetid = tweet['postID']
+                label_list = tweet['categories']
+                priority = tweet['priority']
+                fout.write('{0}\t{1}\t{2}\n'.format(tweetid, ','.join(label_list), priority))
+
+
+def merge_files(filenames: List[str], outfile: str):
+    with open(outfile, 'w', encoding='utf8') as fout:
+        for fname in filenames:
+            with open(fname) as infile:
+                fout.write(infile.read())
+
+
 def write_list_to_file(target_list: list, outfile):
     with open(outfile, 'w', encoding='utf8') as f:
         for line in target_list:
@@ -75,14 +106,15 @@ def get_label2id(label_file: str, train_file: str, threshold: int):
     """
     Because the original labels are in the form of text, such as "MultimediaShare" and so on
     We want to convert those textual labels to digital labels
-    :param label_file:
-    :param train_file:
+    :param label_file: All types of labels provided by TREC, including explanation of each type of label
+    :param train_file: Formalized train file, where each line is in the form of "{tweetid}\t{labels}\t{Priority}\n"
     :param threshold:
     :return:
         label2id: the dict to convert labels to id
         majority_label: the majority label, used when the tweet contents cannot be accessed
         short2long_label: for submission we need to predict the long label (MultimediaShare -> Report-MultimediaShare)
     """
+    # Parsing the file of label type explanation, get the idx for each type of label
     id2label = []
     short2long_label = dict()
     with open(label_file, 'r', encoding='utf8') as f:
@@ -94,16 +126,15 @@ def get_label2id(label_file: str, train_file: str, threshold: int):
         if label in id2label:
             raise ValueError("The label {0} duplicate in {1}".format(label, label_file))
         id2label.append(label)
+    print_to_log("All labels in {0} is: {1}".format(label_file, id2label))
 
     # Count label frequency
     label_count = {label: 0 for label in id2label}
     with open(train_file, 'r', encoding='utf8') as f:
-        train_file_content = json.load(f)
-        for event in train_file_content['events']:
-            for tweet in event['tweets']:
-                for tweet_label in tweet['categories']:
-                    label_count[tweet_label] += 1
-    print_to_log("All labels in {0} is: {1}".format(label_file, id2label))
+        for line in f:
+            labels = line.strip().split('\t')[1].split(',')
+            for label in labels:
+                label_count[label] += 1
 
     # Get the majority label
     majority_label = id2label[0]

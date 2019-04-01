@@ -16,6 +16,9 @@ python3 main.py
 
 ## Task Description
 
+### [Important] Change in 2019 compared with 2018
+[Here](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) is a page to describe the differents.
+
 ### Event Types
 wildfire, earthquake, flood, typhoon/hurricane, bombing, shooting
 
@@ -152,17 +155,19 @@ Currently rank 8/40 in 2018 leaderboard
 - Borrow idea from Twitter Sentiment Analysis (including pre-processing methods)
 - Suggested by Xin: augment interest profile with calling Google API. By the way, remember to deduplicate the tweets (removing tweets of retweet and very similar tweets).
 - Relationship between events (domain adaption/shift)
+- Use time to predict the priority of tweets, and give high priority tweets more weights in train
+- Use indicator terms (such as forming a bag of words) in 2018 training data, because it is a quite important label provided by human labelers
 
 ### Mar29 Discussion
 
 Junpei:
-- Multitask: use the hashtag as the label and try to predict it.
-- Check with host if additional data could be used
+- Cross-validation to see if it is comparable
+- To see if the additional test data added into training is helpful (if data is noisy)
 - Late fusion (train model and then average)
+- [done] Check with host if additional data could be used
 - A classifier to classify event
 - Event-wise model
-- Cross-validation to see if it is comparable
-- To see if the addtional data is helpful (if data is noisy)
+- Multitask: use the hashtag as the label and try to predict it.
 
 Xinyu:
 - News extract feature
@@ -171,7 +176,7 @@ Xinyu:
 - Natural Disaster Dataset
 
 Bernie:
-- Get AWS for this project
+- [done] Get computatioinal resource for this project
 - Check the correctness of get_clean_tweet in utils
 - Classifier part
 

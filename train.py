@@ -24,7 +24,9 @@ class Train(object):
     def train(self):
         self._shuffle_data()
         self._create_model()
-        self._cross_validate()
+        if self.args.cross_validate:
+            self._cross_validate()
+        self.clf.fit(self.data_x, self.data_y)
 
     def predict(self, data_x: np.ndarray, tweetid_list: list, tweetid2idx: list, tweetid2incident: dict,
                 id2label: list, short2long_label: dict, majority_label: str, out_file: str):
@@ -111,9 +113,10 @@ class Train(object):
             f1_list.append(f1_score(y_test, y_predict, average="macro"))
             acc_list.append(self.clf.score(X_test, y_test))
         print_to_log('The acc score in cross validation is {0}'.format(acc_list))
-        print_to_log('The average acc score is {0}'.format(np.mean(acc_list)))
         print_to_log('The f1 score in cross validation is {0}'.format(f1_list))
+        print_to_log('The average acc score is {0}'.format(np.mean(acc_list)))
         print_to_log('The average f1 score is {0}'.format(np.mean(f1_list)))
+        quit()
 
     def get_best_hyper_parameter(self, n_iter_search=100, r_state=1337):
         if self.args.model == 'rf':

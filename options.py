@@ -10,6 +10,9 @@ def get_arguments():
     # reproducibility
     parser.add_argument("--random_seed", type=int, default=9,
                         help="Random seed (>0, set a specific seed).")
+    # Mode
+    parser.add_argument("--cross_validate", action='store_true',
+                        help="Use cross-validation on the whole data (including 2018 train and test)")
     # Data path
     parser.add_argument("--out_dir", type=str, default='out',
                         help="Directory contains the output things, including the log and ckpt")

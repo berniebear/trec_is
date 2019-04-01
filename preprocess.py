@@ -74,38 +74,56 @@ class Preprocess(object):
             fasttext = FastText.load('../data/text_sample_2013to2016_gensim_200.model')
             return fasttext
 
-    def extract_train_data(self, train_file: str):
+    def extract_train_data(self, train_file):
+        return self._extract_data_from_formalized_file(train_file)
+
+    def extract_test_data_with_labels(self, test_file):
+        """
+        This function is deprecated, which is used to extract the test data with labels.
+        However, currently we direct merge train and test files in cross-validation mode, so we only need to extract
+            data and labels from one file (the '2018-all.txt').
+        :param test_file:
+        :return:
+        """
+        return self._extract_data_from_formalized_file(test_file)
+
+    def _extract_data_from_formalized_file(self, filename: str):
         """
         Notice that each tweet may have several labels, and we use each of them to construct a training instance
-        :param train_file:
+        :param filename: The filename of formalized file, where each line is "{tweetid}\t{labels}\t{priority}}"
         :return:
         """
         count_miss = 0
         count_total = 0
         train_x, train_y = [], []
-        with open(train_file, 'r', encoding='utf8') as f:
-            train_file_content = json.load(f)
-            for event in train_file_content['events']:
-                for tweet in event['tweets']:
-                    count_total += 1
-                    tweetid = tweet['postID']
-                    if tweetid in self.tweetid2feature:
-                        feature = self.tweetid2feature[tweetid]
-                        for tweet_label in tweet['categories']:
-                            if tweet_label not in self.label2id:
-                                continue
-                            train_x.append(feature)
-                            train_y.append(self.label2id[tweet_label])
-                    else:
-                        count_miss += 1
+        with open(filename, 'r', encoding='utf8') as f:
+            for line in f:
+                line = line.strip().split('\t')
+                tweetid = line[0]
+                categories = line[1].split(',')
+                count_total += 1
+                if tweetid in self.tweetid2feature:
+                    feature = self.tweetid2feature[tweetid]
+                    for tweet_label in categories:
+                        if tweet_label not in self.label2id:
+                            continue
+                        train_x.append(feature)
+                        train_y.append(self.label2id[tweet_label])
+                else:
+                    count_miss += 1
 
-        utils.print_to_log("There are {0}/{1} tweets cannot find for {2}".format(count_miss, count_total, train_file))
+        utils.print_to_log("There are {0}/{1} tweets cannot find for {2}".format(count_miss, count_total, filename))
         train_x, train_y = np.asarray(train_x), np.asarray(train_y, dtype=np.int32)
         print("The shape of train_x is {0}, shape of train_y is {1}".format(train_x.shape, train_y.shape))
-
         return train_x, train_y
 
     def extract_test_data(self, test_file: str):
+        """
+        This function extracts only X data for testing (assume labels are invisible for us)
+        It also returns many other auxiliary things which are useful during prediction
+        :param test_file:
+        :return:
+        """
         tweetid_list = []
         miss_tweetid = []
         tweetid2idx = dict()
