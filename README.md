@@ -148,6 +148,8 @@ Information Type Accuracy (any valid type, micro): 0.38339061868176305
 
 Currently rank 8/40 in 2018 leaderboard 
 
+Cross-validation F1: 0.56, Accuracy: 0.39 (so it is comparable)
+
 ## Todo
 - Add feature for each event (the type/title/narr tag in the event)
 - Use a better method to predict the importance score
@@ -161,7 +163,8 @@ Currently rank 8/40 in 2018 leaderboard
 ### Mar29 Discussion
 
 Junpei:
-- Cross-validation to see if it is comparable
+- Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
+- [done] Cross-validation to see if it is comparable (question: Current evaluation is any-type, which means only require to have overlap with the test labels, how to perform it in cross-validation)
 - To see if the additional test data added into training is helpful (if data is noisy)
 - Late fusion (train model and then average)
 - [done] Check with host if additional data could be used
@@ -172,8 +175,9 @@ Junpei:
 Xinyu:
 - News extract feature
 - Explore the data to see if the number of images is large enough and useful
-- If data timestep
-- Natural Disaster Dataset
+- Manually check if data timestep contains useful information
+- Natural Disaster Dataset. As shown in the TREC-IS official website, there are six general events: bombing, earthquake, flood, hurricane, wildfire, shooting. 
+The description of each type of general event could be found in its corresponding pdf ("Event Type Profiles" in [webpage](http://dcs.gla.ac.uk/~richardm/TREC_IS/)). 
 
 Bernie:
 - [done] Get computatioinal resource for this project

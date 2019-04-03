@@ -8,7 +8,7 @@ from options import get_arguments
 from preprocess import Preprocess
 from train import Train
 from evaluate import evaluate
-from utils import set_logging
+from utils import set_logging, prepare_folders
 import utils
 
 from nltk.tokenize import TweetTokenizer
@@ -24,19 +24,11 @@ def main():
     random.seed(args.random_seed)
     np.random.seed(args.random_seed)  # sklearn use np to generate random value
 
-    # Set logging format and logging file
+    # Create folders and set logging format
     args.model_dir = os.path.join(args.out_dir, 'ckpt')
     args.log_dir = os.path.join(args.out_dir, 'log')
-    if not os.path.isdir(args.out_dir):
-        os.mkdir(args.out_dir)
-    if not os.path.isdir(args.test_dir):
-        os.mkdir(args.test_dir)
-    if not os.path.isdir(args.log_dir):
-        os.mkdir(args.log_dir)
-    if not os.path.isdir(args.model_dir):
-        os.mkdir(args.model_dir)
+    prepare_folders(args)
     logger = set_logging(args)
-
     logger.info("Here is the arguments of this running:")
     logger.info("{}".format(args))
 
@@ -77,7 +69,7 @@ def main():
 
     # Step2. Train or Cross-validation
     data_x, data_y = preprocess.extract_train_data(formal_train_file)
-    train = Train(args, data_x, data_y)
+    train = Train(args, data_x, data_y, id2label)
     train.train()
 
     # Step3. Predict

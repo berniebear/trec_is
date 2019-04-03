@@ -19,6 +19,9 @@ class Preprocess(object):
 
     def extract_features(self):
         """
+        Todo: It is not very reasonable to concatenate all features directly, because different features may in
+            different scale field. At least the normalization should be used, which also have limited influence.
+            The best method is to train model on those features separately and then combine them together.
         Extract features for all tweetids in self.tweetid_list
         :return:
         """
@@ -79,7 +82,7 @@ class Preprocess(object):
 
     def extract_test_data_with_labels(self, test_file):
         """
-        This function is deprecated, which is used to extract the test data with labels.
+        Note: This function is deprecated, which is used to extract the test data with labels.
         However, currently we direct merge train and test files in cross-validation mode, so we only need to extract
             data and labels from one file (the '2018-all.txt').
         :param test_file:
@@ -89,13 +92,46 @@ class Preprocess(object):
 
     def _extract_data_from_formalized_file(self, filename: str):
         """
+        Extract data in the form of multi-label, where we treat each "tweet" as a training instance, and the label is
+            recorded as a list (such as data_x = [tweetid_1_feature, tweetid_2_feature], data_y = [[0, 2, 5], [1, 5]])
+        :param filename:
+        :return:
+        """
+        count_miss = 0
+        count_total = 0
+        data_x, data_y = [], []
+        with open(filename, 'r', encoding='utf8') as f:
+            for line in f:
+                line = line.strip().split('\t')
+                tweetid = line[0]
+                if self.args.cross_validate:  # The 2018train + 2018test data will not filter out any label
+                    categories = [self.label2id[label] for label in line[1].split(',')]
+                else:
+                    categories = [self.label2id[label] for label in line[1].split(',') if label in self.label2id]
+                count_total += 1
+                if tweetid in self.tweetid2feature:
+                    feature = self.tweetid2feature[tweetid]
+                    data_x.append(feature)
+                    data_y.append(categories)
+                else:
+                    count_miss += 1
+
+        utils.print_to_log("There are {0}/{1} tweets cannot find for {2}".format(count_miss, count_total, filename))
+        data_x, data_y = np.asarray(data_x), np.asarray(data_y)
+        print("The shape of data_x is {0}".format(data_x.shape))
+        return data_x, data_y
+
+    def _extract_data_from_formalized_file_single_label(self, filename: str):
+        """
+        Note: This function has been deprecated, because now we focus on multi-label model, and to make it consistent
+            with the official evaluation file, we need our ground truth label in the form of multi-label
         Notice that each tweet may have several labels, and we use each of them to construct a training instance
         :param filename: The filename of formalized file, where each line is "{tweetid}\t{labels}\t{priority}}"
         :return:
         """
         count_miss = 0
         count_total = 0
-        train_x, train_y = [], []
+        data_x, data_y = [], []
         with open(filename, 'r', encoding='utf8') as f:
             for line in f:
                 line = line.strip().split('\t')
@@ -107,15 +143,15 @@ class Preprocess(object):
                     for tweet_label in categories:
                         if tweet_label not in self.label2id:
                             continue
-                        train_x.append(feature)
-                        train_y.append(self.label2id[tweet_label])
+                        data_x.append(feature)
+                        data_y.append(self.label2id[tweet_label])
                 else:
                     count_miss += 1
 
         utils.print_to_log("There are {0}/{1} tweets cannot find for {2}".format(count_miss, count_total, filename))
-        train_x, train_y = np.asarray(train_x), np.asarray(train_y, dtype=np.int32)
-        print("The shape of train_x is {0}, shape of train_y is {1}".format(train_x.shape, train_y.shape))
-        return train_x, train_y
+        data_x, data_y = np.asarray(data_x), np.asarray(data_y, dtype=np.int32)
+        print("The shape of data_x is {0}, shape of data_y is {1}".format(data_x.shape, data_y.shape))
+        return data_x, data_y
 
     def extract_test_data(self, test_file: str):
         """

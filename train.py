@@ -1,29 +1,33 @@
 from scipy import stats
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
+from sklearn.model_selection import KFold, StratifiedKFold, RandomizedSearchCV
 from sklearn.linear_model import SGDClassifier
 from sklearn.svm import SVC, LinearSVC
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.metrics import f1_score
 from sklearn.metrics.pairwise import chi2_kernel
-from sklearn.preprocessing import Normalizer, MinMaxScaler, StandardScaler
+from sklearn.preprocessing import MultiLabelBinarizer, Normalizer, MinMaxScaler, StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.utils import shuffle
 
 from utils import print_to_log
+import utils
 
 
 class Train(object):
-    def __init__(self, args, data_x: np.ndarray, data_y: np.ndarray):
+    def __init__(self, args, data_x: np.ndarray, data_y: np.ndarray, id2label: list):
         self.args = args
         self.data_x = data_x
         self.data_y = data_y
+        self.id2label = id2label
         self.clf = None
 
     def train(self):
         self._shuffle_data()
         self._create_model()
+        self.data_y = MultiLabelBinarizer(classes=[i for i in range(len(self.id2label))]).fit_transform(self.data_y)
         if self.args.cross_validate:
             self._cross_validate()
         self.clf.fit(self.data_x, self.data_y)
@@ -33,7 +37,8 @@ class Train(object):
         """
         For those missed tweetid (that cannot be found in twitter API), we use the majority label as the prediction res.
         As we can see in the evaluation script, the rank filed doesn't matter.
-        Todo: Currently we only care about the category prediction, and we don't care about the score, but we need
+        Todo: Currently we only care about the category prediction, and we don't care about the score, but we need to
+            care about the "priority" in 2019-A task
         :param data_x: Feature of data
         :param tweetid_list:
         :param tweetid2idx: Can find the actuall idx of this tweetid in data_x
@@ -69,7 +74,7 @@ class Train(object):
         if model_name == 'sgd':
             clf = SGDClassifier(max_iter=1000, tol=1e-3, loss='hinge', class_weight=class_weight)
         elif model_name == 'svm_linear':
-            clf = LinearSVC(class_weight=class_weight, dual=False)
+            clf = LinearSVC(class_weight=class_weight, dual=True)  # Feature dim is large, should use dual
         elif model_name == 'svm_rbf':
             clf = SVC(kernel='rbf', class_weight=class_weight, gamma='auto')
         elif model_name == 'svm_rbf_scale':
@@ -92,7 +97,7 @@ class Train(object):
             clf = RandomForestClassifier(**rf_params)
         else:
             raise NotImplementedError
-        self.clf = clf
+        self.clf = OneVsRestClassifier(clf)
 
     def _cross_validate(self):
         """
@@ -101,22 +106,30 @@ class Train(object):
         :return:
         """
         print_to_log('Use {} fold cross validation'.format(self.args.cv_num))
-        skf = StratifiedKFold(n_splits=self.args.cv_num)
+        kf = KFold(n_splits=self.args.cv_num)  # As StratifiedKFold doesn't support multi-label setting
         acc_list, f1_list = [], []
-        for train, test in skf.split(self.data_x, self.data_y):
+        for train, test in kf.split(self.data_x, self.data_y):
             X_train = self.data_x[train]
             y_train = self.data_y[train]
             X_test = self.data_x[test]
             y_test = self.data_y[test]
             self.clf.fit(X_train, y_train)
-            y_predict = self.clf.predict(X_test)
-            f1_list.append(f1_score(y_test, y_predict, average="macro"))
-            acc_list.append(self.clf.score(X_test, y_test))
+            y_predict = self._get_single_label_predict(X_test)
+            f1, acc = utils.evaluate_any_type(y_test, y_predict, self.id2label)
+            f1_list.append(f1)
+            acc_list.append(acc)
         print_to_log('The acc score in cross validation is {0}'.format(acc_list))
         print_to_log('The f1 score in cross validation is {0}'.format(f1_list))
         print_to_log('The average acc score is {0}'.format(np.mean(acc_list)))
         print_to_log('The average f1 score is {0}'.format(np.mean(f1_list)))
         quit()
+
+    def _get_single_label_predict(self, X_test):
+        if 'svm' in self.args.model:
+            predict_score = self.clf.decision_function(X_test)
+        else:
+            predict_score = self.clf.predict_proba(X_test)
+        return np.argmax(predict_score, axis=-1)
 
     def get_best_hyper_parameter(self, n_iter_search=100, r_state=1337):
         if self.args.model == 'rf':

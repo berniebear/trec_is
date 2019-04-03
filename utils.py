@@ -45,6 +45,17 @@ def set_logging(args):
     return logger
 
 
+def prepare_folders(args):
+    if not os.path.isdir(args.out_dir):
+        os.mkdir(args.out_dir)
+    if not os.path.isdir(args.test_dir):
+        os.mkdir(args.test_dir)
+    if not os.path.isdir(args.log_dir):
+        os.mkdir(args.log_dir)
+    if not os.path.isdir(args.model_dir):
+        os.mkdir(args.model_dir)
+
+
 def formalize_train_file(origin_train_file: str, formalized_train_file: str):
     fout = open(formalized_train_file, 'w', encoding='utf8')
     formalize_helper(origin_train_file, fout)
@@ -161,6 +172,43 @@ def get_id2label(label2id: dict):
     for label, idx in label2id.items():
         id2label[idx] = label
     return id2label
+
+
+def evaluate_any_type(label: np.ndarray, predict: np.ndarray, id2label: List[str]):
+    """
+    "Any type" means that when the predict label is equal to any of the labels in ground truth, we view it as correct
+    Use the "EVALUATON 8: Information Type Categorization (Any-type)" in evaluate.py as reference
+    :param label: A binary 2-D matrix where [i,j] entry represents if ith instance has label j
+    :param predict: A 1-D ndarray where each entry is a prediction
+    :return: f1 and accuracy
+    """
+    truePositive = 0  # system predicted any of the categories selected by the human assessor
+    trueNegative = 0  # system and human assessor both selected either Other-Irrelevant or Other-Unknown
+    falsePositive = 0  # system failed to predict any of the categories selected by the human assessor
+    falseNegative = 0  # human assessor selected either Other-Irrelevant or Other-Unknown but the system prediced something different
+
+    for i, predict_it in enumerate(predict):
+        categoryMatchFound = False
+        isNegativeExample = False
+        if label[i][predict_it] == 1:
+            categoryMatchFound = True
+        if id2label[predict_it] == 'Irrelevant' or id2label[predict_it] == 'Unknown':
+            isNegativeExample = True
+
+        if categoryMatchFound & isNegativeExample:
+            trueNegative = trueNegative + 1
+        if categoryMatchFound & (not isNegativeExample):
+            truePositive = truePositive + 1
+        if (not categoryMatchFound) & isNegativeExample:
+            falseNegative = falseNegative + 1
+        if (not categoryMatchFound) & (not isNegativeExample):
+            falsePositive = falsePositive + 1
+
+    precision = truePositive / (truePositive + falsePositive)
+    recall = truePositive / (truePositive + falseNegative)
+    f1 = 2 * ((precision * recall) / (precision + recall))
+    accuracy = (truePositive + trueNegative) / (truePositive + trueNegative + falsePositive + falseNegative)
+    return f1, accuracy
 
 
 def get_tweetid_content(tweet_file_list: List[str]) -> (List[str], List[dict]):
