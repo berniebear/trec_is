@@ -161,6 +161,8 @@ Currently rank 8/40 in 2018 leaderboard
 2018-train and then test on cross-validation (however, it has a kind of leak, because the train is included in the cross-validation test data).
 The average acc score is 0.40 and the average f1 score is 0.55
 
+When use late fusion, the f1 score will drop a lot.
+
 ## Todo
 - Add feature for each event (the type/title/narr tag in the event)
 - Use a better method to predict the importance score

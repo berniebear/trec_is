@@ -16,6 +16,7 @@ class Preprocess(object):
         self.train_tweet = []
         self.train_label = []
         self.tweetid2feature = dict()
+        self.feature_len = None
 
     def extract_features(self):
         """
@@ -47,9 +48,15 @@ class Preprocess(object):
         utils.print_to_log("The shape of skip_thought_feature is {}".format(skipthought_feature.shape))
         utils.print_to_log("The shape of bert_feature is {}".format(bert_feature.shape))
 
-        # Concatenate all features
+        # Concatenate all features, and record the length of each feature for future use (such as train model for each)
         whole_feature_matrix = np.concatenate([hand_crafted_feature, fasttext_feature,
                                                bert_feature, skipthought_feature], axis=-1)
+        if self.args.late_fusion:
+            self.feature_len = [hand_crafted_feature.shape[-1], fasttext_feature.shape[-1],
+                                bert_feature.shape[-1], skipthought_feature.shape[-1]]
+        else:  # If not use late fusion, we treat the concatenated feature as a whole feature
+            self.feature_len = [whole_feature_matrix.shape[-1]]
+
         assert len(self.tweetid_list) == whole_feature_matrix.shape[0]
         for i, tweetid in enumerate(self.tweetid_list):
             self.tweetid2feature[tweetid] = whole_feature_matrix[i]

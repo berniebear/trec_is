@@ -1,3 +1,4 @@
+from typing import List
 from scipy import stats
 import numpy as np
 import pandas as pd
@@ -17,12 +18,84 @@ import utils
 
 
 class Train(object):
-    def __init__(self, args, data_x: np.ndarray, data_y: np.ndarray, id2label: list):
+    def __init__(self, args, data_x: np.ndarray, data_y: np.ndarray, id2label: list, feature_lens: List[int]):
+        """
+        We use the feature_lens to make the API consistent with or withnot late fusion.
+        If we use late fusion, the feature_lens will contain real lens of different features.
+        If we don't use late fusion, feature_lens will contain a fake number which is the len of concatenated feature
+        Please see details in _fit_data and _predict_data about how we cope with late fusion
+        :param args:
+        :param data_x:
+        :param data_y:
+        :param id2label:
+        :param feature_lens: Contains lens of features, such as [1024, 256] means the first feature is 1024 dim and the
+                second feature is 256 dim
+        """
         self.args = args
         self.data_x = data_x
         self.data_y = data_y
         self.id2label = id2label
-        self.clf = None
+        self.feature_lens = feature_lens
+        self.clf: List[OneVsRestClassifier] = None
+
+    def _fit_data(self, data_x, data_y):
+        start_idx = 0
+        for i_clf, feat_len in enumerate(self.feature_lens):
+            end_idx = start_idx + feat_len
+            self.clf[i_clf].fit(data_x[:, start_idx: end_idx], data_y)
+            start_idx = end_idx
+
+    def _predict_data(self, data_x):
+        """
+        Currently support avg score or voting
+        :param data_x:
+        :return:
+        """
+        return self._predict_data_by_voting(data_x)
+
+    def _predict_data_by_avg_score(self, data_x):
+        """
+        Todo: Now we use simple average, but can use more sophisticated method such as weighted average and so on
+        :param data_x:
+        :return:
+        """
+        start_idx = 0
+        predict_score = np.zeros([data_x.shape[0], len(self.id2label)], dtype=np.float64)
+        for i_clf, feat_len in enumerate(self.feature_lens):
+            end_idx = start_idx + feat_len
+            if 'svm' in self.args.model:
+                predict_score += self.clf[i_clf].decision_function(data_x[:, start_idx: end_idx])
+            else:
+                predict_score += self.clf[i_clf].predict_proba(data_x[:, start_idx: end_idx])
+            start_idx = end_idx
+        return np.argmax(predict_score, axis=-1)
+
+    def _predict_data_by_voting(self, data_x):
+        """
+        Todo: A more sophisticated method is to set weight according to their performance on a hold-out dataset
+        :param data_x:
+        :return:
+        """
+        start_idx = 0
+        labels_count = [dict() for i in range(data_x.shape[0])]
+        for i_clf, feat_len in enumerate(self.feature_lens):
+            end_idx = start_idx + feat_len
+            if 'svm' in self.args.model:
+                predict_score = self.clf[i_clf].decision_function(data_x[:, start_idx: end_idx])
+            else:
+                predict_score = self.clf[i_clf].predict_proba(data_x[:, start_idx: end_idx])
+            predict_label = np.argmax(predict_score, axis=-1)
+            for i_idx, it_label in enumerate(predict_label):
+                labels_count[i_idx][it_label] = labels_count[i_idx].get(it_label, 0) + 1
+            start_idx = end_idx
+        vote_res = [0] * data_x.shape[0]
+        for i, count_dict in enumerate(labels_count):
+            max_vote = -1
+            for predict, count in count_dict.items():
+                if count > max_vote:
+                    max_vote = count
+                    vote_res[i] = predict
+        return np.asarray(vote_res)
 
     def train(self, small_x=None, small_y=None):
         self._shuffle_data()
@@ -32,18 +105,18 @@ class Train(object):
             self._train_on_small_predict_on_large(small_x, small_y)
         if self.args.cross_validate:
             self._cross_validate()
-        self.clf.fit(self.data_x, self.data_y)
+        self._fit_data(self.data_x, self.data_y)
 
     def _train_on_small_predict_on_large(self, small_x, small_y):
         print("Train on the small and test on cross-validate test")
         small_y = MultiLabelBinarizer(classes=[i for i in range(len(self.id2label))]).fit_transform(small_y)
-        self.clf.fit(small_x, small_y)
+        self._fit_data(small_x, small_y)
         kf = KFold(n_splits=self.args.cv_num)
         acc_list, f1_list = [], []
         for train, test in kf.split(self.data_x, self.data_y):
             X_test = self.data_x[test]
             y_test = self.data_y[test]
-            y_predict = self._get_single_label_predict(X_test)
+            y_predict = self._predict_data(X_test)
             f1, acc = utils.evaluate_any_type(y_test, y_predict, self.id2label)
             f1_list.append(f1)
             acc_list.append(acc)
@@ -71,7 +144,7 @@ class Train(object):
         :return:
         """
         fout = open(out_file, 'w', encoding='utf8')
-        predict_res = self.clf.predict(data_x)
+        predict_res = self._predict_data(data_x)
         count_label = []
         for tweetid in tweetid_list:
             incident = tweetid2incident[tweetid]
@@ -89,6 +162,9 @@ class Train(object):
         self.data_x, self.data_y = shuffle(self.data_x, self.data_y)
 
     def _create_model(self):
+        self.clf = [self._create_single_model() for i in range(len(self.feature_lens))]
+
+    def _create_single_model(self):
         class_weight = None if self.args.no_class_weight else 'balanced'
         model_name = self.args.model
         print_to_log("The model used here is {0}".format(model_name))
@@ -118,7 +194,7 @@ class Train(object):
             clf = RandomForestClassifier(**rf_params)
         else:
             raise NotImplementedError
-        self.clf = OneVsRestClassifier(clf)
+        return OneVsRestClassifier(clf)
 
     def _cross_validate(self):
         """
@@ -135,8 +211,8 @@ class Train(object):
             y_train = self.data_y[train]
             X_test = self.data_x[test]
             y_test = self.data_y[test]
-            self.clf.fit(X_train, y_train)
-            y_predict = self._get_single_label_predict(X_test)
+            self._fit_data(X_train, y_train)
+            y_predict = self._predict_data(X_test)
             f1, acc = utils.evaluate_any_type(y_test, y_predict, self.id2label)
             f1_list.append(f1)
             acc_list.append(acc)
@@ -145,13 +221,6 @@ class Train(object):
         print_to_log('The average acc score is {0}'.format(np.mean(acc_list)))
         print_to_log('The average f1 score is {0}'.format(np.mean(f1_list)))
         quit()
-
-    def _get_single_label_predict(self, X_test):
-        if 'svm' in self.args.model:
-            predict_score = self.clf.decision_function(X_test)
-        else:
-            predict_score = self.clf.predict_proba(X_test)
-        return np.argmax(predict_score, axis=-1)
 
     def get_best_hyper_parameter(self, n_iter_search=100, r_state=1337):
         if self.args.model == 'rf':

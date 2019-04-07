@@ -15,6 +15,8 @@ def get_arguments():
                         help="Use cross-validation on the whole data (including 2018 train and test)")
     parser.add_argument("--train_on_small", action='store_true',
                         help="Use 18-train to train, and test on cross-validation test, to see if additional data helps")
+    parser.add_argument("--late_fusion", action='store_true',
+                        help="Don't concat features early, train models on each kind of feature, and then merge them")
     # Data path
     parser.add_argument("--out_dir", type=str, default='out',
                         help="Directory contains the output things, including the log and ckpt")
