@@ -148,7 +148,18 @@ Information Type Accuracy (any valid type, micro): 0.38339061868176305
 
 Currently rank 8/40 in 2018 leaderboard 
 
-Cross-validation F1: 0.56, Accuracy: 0.39 (so it is comparable)
+
+**Experiments to see if cross-val is comparable with previous setting**
+
+2018-train + test perform Cross-validation F1: 0.56, Accuracy: 0.39 (so it is comparable). Here are details
+```
+2019-04-02 22:53:14,006 - root - INFO - The acc score in cross validation is [0.4090368608799049, 0.38002378121284186, 0.38882282996432815, 0.38106565176022833, 0.3946241674595623]
+2019-04-02 22:53:14,006 - root - INFO - The f1 score in cross validation is [0.5778834720570749, 0.5491959190731454, 0.5579635362917097, 0.5509147393855712, 0.5642869371682931]
+2019-04-02 22:53:14,006 - root - INFO - The average acc score is 0.3907146582553731
+2019-04-02 22:53:14,006 - root - INFO - The average f1 score is 0.5600489207951589
+```
+2018-train and then test on cross-validation (however, it has a kind of leak, because the train is included in the cross-validation test data).
+The average acc score is 0.40 and the average f1 score is 0.55
 
 ## Todo
 - Add feature for each event (the type/title/narr tag in the event)
@@ -165,8 +176,8 @@ Cross-validation F1: 0.56, Accuracy: 0.39 (so it is comparable)
 Junpei:
 - Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
 - [done] Cross-validation to see if it is comparable (question: Current evaluation is any-type, which means only require to have overlap with the test labels, how to perform it in cross-validation)
-- To see if the additional test data added into training is helpful (if data is noisy)
-- Late fusion (train model and then average)
+- [done] To see if the additional test data added into training is helpful (if data is noisy)
+- Late fusion (train model and then average, because different features may not in the same scale)
 - [done] Check with host if additional data could be used
 - A classifier to classify event
 - Event-wise model

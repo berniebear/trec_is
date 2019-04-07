@@ -70,6 +70,11 @@ def main():
     # Step2. Train or Cross-validation
     data_x, data_y = preprocess.extract_train_data(formal_train_file)
     train = Train(args, data_x, data_y, id2label)
+    if args.train_on_small:
+        # To see if the additional data is helpful
+        assert args.cross_validate is True
+        small_x, small_y = preprocess.extract_train_data(os.path.join(args.data_dir, '2018-train.txt'))
+        train.train(small_x, small_y)
     train.train()
 
     # Step3. Predict

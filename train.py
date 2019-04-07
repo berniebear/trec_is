@@ -24,13 +24,34 @@ class Train(object):
         self.id2label = id2label
         self.clf = None
 
-    def train(self):
+    def train(self, small_x=None, small_y=None):
         self._shuffle_data()
         self._create_model()
         self.data_y = MultiLabelBinarizer(classes=[i for i in range(len(self.id2label))]).fit_transform(self.data_y)
+        if self.args.train_on_small:
+            self._train_on_small_predict_on_large(small_x, small_y)
         if self.args.cross_validate:
             self._cross_validate()
         self.clf.fit(self.data_x, self.data_y)
+
+    def _train_on_small_predict_on_large(self, small_x, small_y):
+        print("Train on the small and test on cross-validate test")
+        small_y = MultiLabelBinarizer(classes=[i for i in range(len(self.id2label))]).fit_transform(small_y)
+        self.clf.fit(small_x, small_y)
+        kf = KFold(n_splits=self.args.cv_num)
+        acc_list, f1_list = [], []
+        for train, test in kf.split(self.data_x, self.data_y):
+            X_test = self.data_x[test]
+            y_test = self.data_y[test]
+            y_predict = self._get_single_label_predict(X_test)
+            f1, acc = utils.evaluate_any_type(y_test, y_predict, self.id2label)
+            f1_list.append(f1)
+            acc_list.append(acc)
+        print('The acc score in cross validation is {0}'.format(acc_list))
+        print('The f1 score in cross validation is {0}'.format(f1_list))
+        print('The average acc score is {0}'.format(np.mean(acc_list)))
+        print('The average f1 score is {0}'.format(np.mean(f1_list)))
+        quit()
 
     def predict(self, data_x: np.ndarray, tweetid_list: list, tweetid2idx: list, tweetid2incident: dict,
                 id2label: list, short2long_label: dict, majority_label: str, out_file: str):
@@ -103,6 +124,7 @@ class Train(object):
         """
         Don't worry about stratified K-fold, because for cross_validate,
             if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used
+        Todo: If you want to get more balanced k-fold split, you can refer to `proba_mass_split` in utils.py
         :return:
         """
         print_to_log('Use {} fold cross validation'.format(self.args.cv_num))
