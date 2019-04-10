@@ -164,6 +164,11 @@ The average acc score is 0.40 and the average f1 score is 0.55
 When use late fusion, the f1 score will drop a lot.
 
 ## Todo
+- Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
+- Multitask: use the hashtag as the label and try to predict it.
+- Read official fasttext ipython notebook to figure out why it performs so high (I guess it dues to parameter search)
+- First clasify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
+- Hand-crafted rule feature for each type
 - Add feature for each event (the type/title/narr tag in the event)
 - Use a better method to predict the importance score
 - Use generative model, try to model the joint distribution of p(x,y) and can extract the feature to feed into the descriptive model (similar to ELMo)
@@ -176,14 +181,11 @@ When use late fusion, the f1 score will drop a lot.
 ### Mar29 Discussion
 
 Junpei:
-- Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
 - [done] Cross-validation to see if it is comparable (question: Current evaluation is any-type, which means only require to have overlap with the test labels, how to perform it in cross-validation)
 - [done] To see if the additional test data added into training is helpful (if data is noisy)
-- Late fusion (train model and then average, because different features may not in the same scale)
+- [done] Late fusion (train model and then average, because different features may not in the same scale; However, for graph-based model such as NB the scale will not influence it)
 - [done] Check with host if additional data could be used
-- A classifier to classify event
-- Event-wise model
-- Multitask: use the hashtag as the label and try to predict it.
+- A classifier to classify event (Event-wise model)
 
 Xinyu:
 - News extract feature
@@ -202,3 +204,8 @@ Bernie:
 Official Baseline system: https://github.com/cbuntain/trecis
 
 It is quite useful as it includes many features and pre-trained vectors and introduce another large dataset that could be used
+
+Some addtional tweets data: 
+- https://crisislex.org/data-collections.html#CrisisLexT26
+- https://crisisnlp.qcri.org/
+- Get tweets by hashtags and keywords through Twitter API (like the way to collect retrospective data)
