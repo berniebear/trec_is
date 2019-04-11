@@ -112,18 +112,18 @@ class Train(object):
         small_y = MultiLabelBinarizer(classes=[i for i in range(len(self.id2label))]).fit_transform(small_y)
         self._fit_data(small_x, small_y)
         kf = KFold(n_splits=self.args.cv_num)
-        acc_list, f1_list = [], []
+        metric_names = ['accuracy', 'precision', 'recall', 'f1']
+        metric_values = {metric_name: [] for metric_name in metric_names}
         for train, test in kf.split(self.data_x, self.data_y):
             X_test = self.data_x[test]
             y_test = self.data_y[test]
             y_predict = self._predict_data(X_test)
-            f1, acc = utils.evaluate_any_type(y_test, y_predict, self.id2label)
-            f1_list.append(f1)
-            acc_list.append(acc)
-        print('The acc score in cross validation is {0}'.format(acc_list))
-        print('The f1 score in cross validation is {0}'.format(f1_list))
-        print('The average acc score is {0}'.format(np.mean(acc_list)))
-        print('The average f1 score is {0}'.format(np.mean(f1_list)))
+            metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
+            for metric_name in metric_names:
+                metric_values[metric_name].append(metric_results[metric_name])
+        for metric_name in metric_names:
+            print('The {0} score in cross validation is {1}'.format(metric_name, metric_values[metric_name]))
+            print('The average {0} score is {1}'.format(metric_name, np.mean(metric_values[metric_name])))
         quit()
 
     def predict(self, data_x: np.ndarray, tweetid_list: list, tweetid2idx: list, tweetid2incident: dict,
@@ -205,7 +205,8 @@ class Train(object):
         """
         print_to_log('Use {} fold cross validation'.format(self.args.cv_num))
         kf = KFold(n_splits=self.args.cv_num)  # As StratifiedKFold doesn't support multi-label setting
-        acc_list, f1_list = [], []
+        metric_names = ['accuracy', 'precision', 'recall', 'f1']
+        metric_values = {metric_name: [] for metric_name in metric_names}
         for train, test in kf.split(self.data_x, self.data_y):
             X_train = self.data_x[train]
             y_train = self.data_y[train]
@@ -213,13 +214,12 @@ class Train(object):
             y_test = self.data_y[test]
             self._fit_data(X_train, y_train)
             y_predict = self._predict_data(X_test)
-            f1, acc = utils.evaluate_any_type(y_test, y_predict, self.id2label)
-            f1_list.append(f1)
-            acc_list.append(acc)
-        print_to_log('The acc score in cross validation is {0}'.format(acc_list))
-        print_to_log('The f1 score in cross validation is {0}'.format(f1_list))
-        print_to_log('The average acc score is {0}'.format(np.mean(acc_list)))
-        print_to_log('The average f1 score is {0}'.format(np.mean(f1_list)))
+            metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
+            for metric_name in metric_names:
+                metric_values[metric_name].append(metric_results[metric_name])
+        for metric_name in metric_names:
+            print_to_log('The {0} score in cross validation is {1}'.format(metric_name, metric_values[metric_name]))
+            print_to_log('The average {0} score is {1}'.format(metric_name, np.mean(metric_values[metric_name])))
         quit()
 
     def get_best_hyper_parameter(self, n_iter_search=100, r_state=1337):

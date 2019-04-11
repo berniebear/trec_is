@@ -180,7 +180,7 @@ def get_id2label(label2id: dict):
     return id2label
 
 
-def evaluate_any_type(label: np.ndarray, predict: np.ndarray, id2label: List[str]):
+def evaluate_any_type(label: np.ndarray, predict: np.ndarray, id2label: List[str]) -> Dict[str, float]:
     """
     "Any type" means that when the predict label is equal to any of the labels in ground truth, we view it as correct
     Use the "EVALUATON 8: Information Type Categorization (Any-type)" in evaluate.py as reference
@@ -214,7 +214,7 @@ def evaluate_any_type(label: np.ndarray, predict: np.ndarray, id2label: List[str
     recall = truePositive / (truePositive + falseNegative)
     f1 = 2 * ((precision * recall) / (precision + recall))
     accuracy = (truePositive + trueNegative) / (truePositive + trueNegative + falsePositive + falseNegative)
-    return f1, accuracy
+    return {'accuracy': accuracy, 'precision': precision, 'recall': recall, 'f1': f1}
 
 
 def proba_mass_split(y, folds=7):
