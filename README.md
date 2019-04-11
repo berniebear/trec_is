@@ -185,6 +185,7 @@ Junpei:
 - [done] To see if the additional test data added into training is helpful (if data is noisy)
 - [done] Late fusion (train model and then average, because different features may not in the same scale; However, for graph-based model such as NB the scale will not influence it)
 - [done] Check with host if additional data could be used
+- [half-done] Install the CUDA and other dependencies. Need Bernie to reboot and abandon the secure boot of Ubuntu
 - A classifier to classify event (Event-wise model)
 
 Xinyu:
@@ -209,3 +210,4 @@ Some addtional tweets data:
 - https://crisislex.org/data-collections.html#CrisisLexT26
 - https://crisisnlp.qcri.org/
 - Get tweets by hashtags and keywords through Twitter API (like the way to collect retrospective data)
+

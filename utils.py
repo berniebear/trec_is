@@ -20,6 +20,12 @@ sentiment_analyzer = SentimentIntensityAnalyzer()
 logger = logging.getLogger()
 
 
+class GloveVectorizer(object):
+    def __init__(self, word2vecs: Dict[str, List[float]], vector_size: int):
+        self.wv = word2vecs
+        self.vector_size = vector_size
+
+
 def set_logging(args):
     # create logger, if you call it in other script, it will retrieve this logger
     logger = logging.getLogger()
@@ -339,8 +345,18 @@ def extract_by_tfidf(texts: list, vectorizer: TfidfVectorizer) -> csr_matrix:
     return vectorizer.transform(texts)
 
 
-def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer,
+def extract_by_fasttext(texts: list, vectorizer, analyzer,
                         tfidf_feature: csr_matrix, tfidf_vocab: list, merge: str = 'avg'):
+    return extract_by_word_embed(texts, vectorizer, analyzer, tfidf_feature, tfidf_vocab, 'fasttext', merge)
+
+
+def extract_by_glove(texts: list, vectorizer, analyzer,
+                     tfidf_feature: csr_matrix, tfidf_vocab: list, merge: str = 'avg'):
+    return extract_by_word_embed(texts, vectorizer, analyzer, tfidf_feature, tfidf_vocab, 'glove', merge)
+
+
+def extract_by_word_embed(texts: list, vectorizer, analyzer,
+                          tfidf_feature: csr_matrix, tfidf_vocab: list, embed_name: str, merge: str):
     """
     We get two kinds of fasttext features here, the first is the simple average,
         the other is weighted sum according to tfidf score.
@@ -351,6 +367,7 @@ def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer,
     :param analyzer:
     :param tfidf_feature:
     :param tfidf_vocab:
+    :param embed_name: fasttext or glove, here we provide a uniform API for it
     :param merge: The type of merge for tokens to get sentence feature. 'avg' means average merging,
             'weighted' means weighted sum according to tf-idf weight
     :return:
@@ -377,8 +394,9 @@ def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer,
                 sentence_vec = np.mean(np.asarray(wvs), axis=0)
             avg_feature.append(sentence_vec)
         fasttext_feature = np.asarray(avg_feature)  # [sent_num, embed_dim]
-        assert len(fasttext_feature.shape) == 2, "The shape of avg_feature is {}, which is wrong".format(fasttext_feature.shape)
-        print_to_log("There are {} words missed by the fasttext model in tweets".format(count_miss))
+        assert len(fasttext_feature.shape) == 2, \
+            "The shape for {0} of avg_feature is {1}".format(embed_name, fasttext_feature.shape)
+        print_to_log("There are {0} words missed by the {1} in tweets".format(count_miss, embed_name))
 
     elif merge == 'weighted':
         # Get the weighted sum feature by tf-idf score
@@ -393,7 +411,8 @@ def extract_by_fasttext(texts: list, vectorizer: FastText, analyzer,
             fasttext_for_vocab.append(fasttext_vec)
         fasttext_for_vocab = np.asarray(fasttext_for_vocab)
         fasttext_feature = tfidf_feature.dot(fasttext_for_vocab)
-        print_to_log("There are {0}/{1} words missed by the fasttext model in tfidf vocab".format(count_miss, tfidf_feature.shape[1]))
+        print_to_log("There are {0}/{1} words missed by the {2} in tfidf vocab".format(
+            count_miss, tfidf_feature.shape[1], embed_name))
 
     else:
         raise ValueError("The value of merge {} is invalid".format(merge))
@@ -456,7 +475,13 @@ def extract_hand_crafted_feature(content_list: list) -> (np.ndarray, List[str]):
 
 
 def get_clean_tweet(tweet: str, enities_info: dict):
-    # Replace the text in hashtags, and remove the mentions and urls (indices are provided by twitter API)
+    """
+    Replace the text in hashtags, and remove the mentions and urls (indices are provided by twitter API)
+    Todo: The hashtags may need to be taken care of, because it contains critical info
+    :param tweet:
+    :param enities_info:
+    :return:
+    """
     indices_txt = []
     for hashtag in enities_info['hashtags']:
         txt = hashtag['text']

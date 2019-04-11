@@ -1,5 +1,4 @@
 import string
-import json
 from typing import List, Dict
 import numpy as np
 from sklearn.externals import joblib
@@ -9,6 +8,15 @@ import utils
 
 class Preprocess(object):
     def __init__(self, args, tweetid_list: List[str], tweet_content_list: List[dict], label2id: dict):
+        """
+        Use feature_used to control which features are used for sentence-level feature extraction.
+            Currently available features: 'hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove'
+            Todo: add 'glove_keywords'
+        :param args:
+        :param tweetid_list:
+        :param tweet_content_list:
+        :param label2id:
+        """
         self.args = args
         self.tweetid_list = tweetid_list
         self.tweet_content_list = tweet_content_list
@@ -17,43 +25,60 @@ class Preprocess(object):
         self.train_label = []
         self.tweetid2feature = dict()
         self.feature_len = None
+        self.feature_collection = []
+        self.feature_used = ['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove']
+
+    def _collect_feature(self, feature, feat_name):
+        self.feature_collection.append(feature)
+        utils.print_to_log("The shape of {0}_feature is {1}".format(feat_name, feature.shape))
 
     def extract_features(self):
         """
-        Todo: It is not very reasonable to concatenate all features directly, because different features may in
-            different scale field. At least the normalization should be used, which also have limited influence.
-            The best method is to train model on those features separately and then combine them together.
+        Use feature_len to make the late-fusion compatible with early-fusion (first concatenate all features)
         Extract features for all tweetids in self.tweetid_list
         :return:
         """
-        tfidf_vectorizer = self._get_tfidf_vectorizer()
-        fasttext_vectorizer = self._get_fasttext_vectorizer()
-        analyzer = tfidf_vectorizer.build_analyzer()
-
         hand_crafted_feature, clean_texts = utils.extract_hand_crafted_feature(self.tweet_content_list)
-        tfidf_feature = utils.extract_by_tfidf(clean_texts, tfidf_vectorizer)
-        fasttext_feature = utils.extract_by_fasttext(clean_texts, fasttext_vectorizer, analyzer,
-                                                     tfidf_feature, tfidf_vectorizer.get_feature_names(),
-                                                     self.args.fasttext_merge)
-        del tfidf_feature
 
-        tweetid2skip_vec = utils.get_tweetid2vec(self.args.tweet_id_out_file,
-                                                 self.args.skipthought_vec_file, 'skip-thought')
-        skipthought_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2skip_vec, 'skip-thought')
-        tweetid2bertvec = utils.get_tweetid2vec(self.args.tweet_id_out_file, self.args.bert_vec_file, 'bert')
-        bert_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2bertvec, 'bert')
+        if 'hand_crafted' in self.feature_used:
+            self._collect_feature(hand_crafted_feature, 'hand_crafted')
 
-        utils.print_to_log("The shape of hand_crafted_feature is {}".format(hand_crafted_feature.shape))
-        utils.print_to_log("The shape of fasttext_feature is {}".format(fasttext_feature.shape))
-        utils.print_to_log("The shape of skip_thought_feature is {}".format(skipthought_feature.shape))
-        utils.print_to_log("The shape of bert_feature is {}".format(bert_feature.shape))
+        if 'glove' in self.feature_used or 'fasttext' in self.feature_used:
+            tfidf_vectorizer = self._get_tfidf_vectorizer()
+            analyzer = tfidf_vectorizer.build_analyzer()
+            tfidf_feature = utils.extract_by_tfidf(clean_texts, tfidf_vectorizer)
+            if 'glove' in self.feature_used:
+                glove_vectorizer = self._get_glove_vectorizer()
+                glove_feature = utils.extract_by_glove(clean_texts, glove_vectorizer, analyzer,
+                                                       tfidf_feature, tfidf_vectorizer.get_feature_names(),
+                                                       self.args.glove_merge)
+                self._collect_feature(glove_feature, 'glove')
+            if 'fasttext' in self.feature_used:
+                fasttext_vectorizer = self._get_fasttext_vectorizer()
+                fasttext_feature = utils.extract_by_fasttext(clean_texts, fasttext_vectorizer, analyzer,
+                                                             tfidf_feature, tfidf_vectorizer.get_feature_names(),
+                                                             self.args.fasttext_merge)
+                self._collect_feature(fasttext_feature, 'fasttext')
+            del tfidf_feature
+
+        if 'skip_thought' in self.feature_used:
+            tweetid2skip_vec = utils.get_tweetid2vec(self.args.tweet_id_out_file,
+                                                     self.args.skipthought_vec_file, 'skip-thought')
+            skipthought_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2skip_vec, 'skip-thought')
+            self._collect_feature(skipthought_feature, 'skip_thought')
+
+        if 'bert' in self.feature_used:
+            tweetid2bertvec = utils.get_tweetid2vec(self.args.tweet_id_out_file, self.args.bert_vec_file, 'bert')
+            bert_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2bertvec, 'bert')
+            self._collect_feature(bert_feature, 'bert')
+
+        if 'glove_keywords' in self.feature_used:
+            raise NotImplementedError("The glove_keywords need to be adapted from Xinyu wrapper")
 
         # Concatenate all features, and record the length of each feature for future use (such as train model for each)
-        whole_feature_matrix = np.concatenate([hand_crafted_feature, fasttext_feature,
-                                               bert_feature, skipthought_feature], axis=-1)
+        whole_feature_matrix = np.concatenate(self.feature_collection, axis=-1)
         if self.args.late_fusion:
-            self.feature_len = [hand_crafted_feature.shape[-1], fasttext_feature.shape[-1],
-                                bert_feature.shape[-1], skipthought_feature.shape[-1]]
+            self.feature_len = [it_feature.shape[-1] for it_feature in self.feature_collection]
         else:  # If not use late fusion, we treat the concatenated feature as a whole feature
             self.feature_len = [whole_feature_matrix.shape[-1]]
 
@@ -68,7 +93,7 @@ class Preprocess(object):
             vectorizer = TfidfVectorizer()
             vectorizer.fit(['This is a test document', 'This is just used for testing'])
         else:
-            vectorizer = joblib.load('../data/2013to2016_tfidf_vectorizer_20190109.pkl')
+            vectorizer = joblib.load(self.args.tfidf_model_path)
         return vectorizer
 
     def _get_fasttext_vectorizer(self):
@@ -81,8 +106,24 @@ class Preprocess(object):
             fasttext.train(cleaned_text, total_examples=fasttext.corpus_count, epochs=fasttext.epochs)
             return fasttext
         else:
-            fasttext = FastText.load('../data/text_sample_2013to2016_gensim_200.model')
+            fasttext = FastText.load(self.args.fasttext_model_path)
             return fasttext
+
+    def _get_glove_vectorizer(self) -> utils.GloveVectorizer:
+        if self.args.sanity_check:
+            return utils.GloveVectorizer({'a': [1.0] * 200}, 200)
+        else:
+            word2vecs = dict()
+            vec_dim = None
+            with open(self.args.glove_path, 'r', encoding='utf8') as f:
+                for line in f:
+                    line = line.strip().split()
+                    word = line[0]
+                    embedding = [float(val) for val in line[1:]]
+                    if vec_dim is None:
+                        vec_dim = len(embedding)
+                    word2vecs[word] = embedding
+            return utils.GloveVectorizer(word2vecs, vec_dim)
 
     def extract_train_data(self, train_file):
         return self._extract_data_from_formalized_file(train_file)
