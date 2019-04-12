@@ -26,7 +26,7 @@ class Preprocess(object):
         self.tweetid2feature = dict()
         self.feature_len = None
         self.feature_collection = []
-        self.feature_used = ['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove']
+        self.feature_used = ['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'fasttext_crawl']
 
     def _collect_feature(self, feature, feat_name):
         self.feature_collection.append(feature)
@@ -71,6 +71,12 @@ class Preprocess(object):
             tweetid2bertvec = utils.get_tweetid2vec(self.args.tweet_id_out_file, self.args.bert_vec_file, 'bert')
             bert_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2bertvec, 'bert')
             self._collect_feature(bert_feature, 'bert')
+
+        if 'fasttext_crawl' in self.feature_used:
+            tweetid2crawl_vec = utils.get_tweetid2vec(self.args.tweet_id_out_file,
+                                                      self.args.fasttext_crawl_vec_file, 'fasttext-crawl')
+            crawl_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2crawl_vec, 'fasttext-crawl')
+            self._collect_feature(crawl_feature, 'fasttext-crawl')
 
         if 'glove_keywords' in self.feature_used:
             raise NotImplementedError("The glove_keywords need to be adapted from Xinyu wrapper")

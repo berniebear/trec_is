@@ -38,7 +38,7 @@ def get_arguments():
                         help='avg | weighted')
     # Model
     parser.add_argument("--model", type=str, default='bernoulli_nb',
-                        help="bernoulli_nb | rf | sgd")
+                        help="bernoulli_nb | rf | sgd_svm")
     parser.add_argument("--no_class_weight", action='store_true',
                         help="Not use different weights for each class")
     parser.add_argument("--cv_num", type=int, default=5,

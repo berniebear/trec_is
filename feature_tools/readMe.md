@@ -18,7 +18,6 @@ Tips: Can run on Google Colab because it only needs several hours
 
 ### Skip-thoughts
 
-
 Here we use the skip-thought code implemented by TensorFlow Examples [here](https://github.com/tensorflow/models/tree/master/research/skip_thoughts)
 
 1. Clone the official bert code into `./skip_thoughts`
@@ -26,3 +25,13 @@ Here we use the skip-thought code implemented by TensorFlow Examples [here](http
 1. Set the `skip_thought_dir` in `extract_feature.py`
 1. Set the `input_file` and `output_file` in `get_embedding.sh`
 1. Run the `bash get_embedding.sh`
+
+### FastText
+
+Although the official host provides the fasttext pretrained on the 2013-2016 twitter data, we can still use another pretrained provided by Facebook,
+which is 2 million word vectors trained with subword information on Common Crawl (600B tokens).
+
+1. Download the pretrained fasttext model from [here](https://fasttext.cc/docs/en/english-vectors.html)
+1. If we only want to use the static file, we can just find all words in the .vec file
+1. However, as we want to utilize the subword info to cope with the OOV, we need to use the .bin file
+1. Just run the `bash get_embedding.sh`

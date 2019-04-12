@@ -294,8 +294,8 @@ def get_tweetid2vec(tweetid_file: str, vec_file: str, feat_name: str) -> Dict[st
     """
     if feat_name == 'bert':
         return get_tweetid2bertvec(tweetid_file, vec_file)
-    elif feat_name == 'skip-thought':
-        return get_tweetid2skipthought_vec(tweetid_file, vec_file)
+    elif feat_name == 'skip-thought' or feat_name == 'fasttext-crawl':
+        return get_tweetid2vec_by_npy(tweetid_file, vec_file)
     else:
         tweetid2vec = dict()
         tweetid_list = []
@@ -324,21 +324,21 @@ def get_tweetid2bertvec(tweetid_file: str, bert_vec_file: str) -> Dict[str, List
     return tweetid2bertvec
 
 
-def get_tweetid2skipthought_vec(tweetid_file: str, skipthought_vec_file: str) -> Dict[str, List[float]]:
+def get_tweetid2vec_by_npy(tweetid_file: str, npy_vec_file: str) -> Dict[str, List[float]]:
     """
-    Here the skip thought use .npy format to store the vectors
+    Here the skip thought and the fasttext-crawl use .npy format to store the vectors
     :param tweetid_file:
-    :param skipthought_vec_file:
+    :param npy_vec_file:
     :return:
     """
-    tweetid2skipthought_vec = dict()
-    feat_vectors = np.load(skipthought_vec_file)
+    tweetid2vec = dict()
+    feat_vectors = np.load(npy_vec_file)
 
     with open(tweetid_file, 'r', encoding='utf8') as f:
         for i, line in enumerate(f):
             tweetid = line.strip()
-            tweetid2skipthought_vec[tweetid] = feat_vectors[i].tolist()
-    return tweetid2skipthought_vec
+            tweetid2vec[tweetid] = feat_vectors[i].tolist()
+    return tweetid2vec
 
 
 def extract_by_tfidf(texts: list, vectorizer: TfidfVectorizer) -> csr_matrix:

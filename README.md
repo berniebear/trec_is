@@ -163,10 +163,19 @@ The average acc score is 0.40 and the average f1 score is 0.55
 
 When use late fusion, the f1 score will drop a lot.
 
+When use random forest `--cross_validate --model rf`
+```
+2019-04-11 18:40:46,411 - root - INFO - The average accuracy score is 0.6419636810421194
+2019-04-11 18:40:46,411 - root - INFO - The average precision score is 0.6434336557411932
+019-04-11 18:40:46,411 - root - INFO - The average recall score is 0.9848954373241163
+2019-04-11 18:40:46,411 - root - INFO - The average f1 score is 0.7783424367579415
+```
+
 ## Todo
 - Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
 - Multitask: use the hashtag as the label and try to predict it.
 - Read official fasttext ipython notebook to figure out why it performs so high (I guess it dues to parameter search)
+- Use fasttext trained on other dataset (currently we use the fasttext trained by tweets provided by the host)
 - First clasify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
 - Hand-crafted rule feature for each type
 - Add feature for each event (the type/title/narr tag in the event)
@@ -177,6 +186,7 @@ When use late fusion, the f1 score will drop a lot.
 - Relationship between events (domain adaption/shift)
 - Use time to predict the priority of tweets, and give high priority tweets more weights in train
 - Use indicator terms (such as forming a bag of words) in 2018 training data, because it is a quite important label provided by human labelers
+- Retrain skip-thought on additional data
 
 ### Mar29 Discussion
 
@@ -186,7 +196,8 @@ Junpei:
 - [done] Late fusion (train model and then average, because different features may not in the same scale; However, for graph-based model such as NB the scale will not influence it)
 - [done] Check with host if additional data could be used
 - [half-done] Install the CUDA and other dependencies. Need Bernie to reboot and abandon the secure boot of Ubuntu
-- A classifier to classify event (Event-wise model)
+- [done] Add Glove to feature
+- A classifier to classify event (Event-wise model) However, the event of each test tweet will be informed, so we can manually choose classifier for each event?
 
 Xinyu:
 - News extract feature
@@ -210,4 +221,5 @@ Some addtional tweets data:
 - https://crisislex.org/data-collections.html#CrisisLexT26
 - https://crisisnlp.qcri.org/
 - Get tweets by hashtags and keywords through Twitter API (like the way to collect retrospective data)
+  - Here are some keywords provided by a paper: #pray4victims: Consistencies In Response To Disaster on Twitter (the official baseline get 741,859 tweets by those keywords)
 

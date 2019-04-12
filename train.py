@@ -168,7 +168,7 @@ class Train(object):
         class_weight = None if self.args.no_class_weight else 'balanced'
         model_name = self.args.model
         print_to_log("The model used here is {0}".format(model_name))
-        if model_name == 'sgd':
+        if model_name == 'sgd_svm':
             clf = SGDClassifier(max_iter=1000, tol=1e-3, loss='hinge', class_weight=class_weight)
         elif model_name == 'svm_linear':
             clf = LinearSVC(class_weight=class_weight, dual=True)  # Feature dim is large, should use dual

@@ -57,6 +57,7 @@ def main():
     args.tweet_id_out_file = os.path.join(args.out_dir, 'tweets-id.txt')
     args.skipthought_vec_file = os.path.join(args.out_dir, 'skip-thought-vec.npy')
     args.bert_vec_file = os.path.join(args.out_dir, 'bert-vec.json')
+    args.fasttext_crawl_vec_file = os.path.join(args.out_dir, 'fasttext-crawl-vec.npy')
 
     # Step1. Preprocess and extract features for all tweets
     label2id, majority_label, short2long_label = utils.get_label2id(label_file, formal_train_file, args.cv_num)
