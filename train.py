@@ -20,7 +20,7 @@ import utils
 class Train(object):
     def __init__(self, args, data_x: np.ndarray, data_y: np.ndarray, id2label: list, feature_lens: List[int]):
         """
-        We use the feature_lens to make the API consistent with or withnot late fusion.
+        We use the feature_lens to make the API consistent with or without late fusion.
         If we use late fusion, the feature_lens will contain real lens of different features.
         If we don't use late fusion, feature_lens will contain a fake number which is the len of concatenated feature
         Please see details in _fit_data and _predict_data about how we cope with late fusion

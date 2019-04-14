@@ -26,7 +26,7 @@ Here we use the skip-thought code implemented by TensorFlow Examples [here](http
 1. Set the `input_file` and `output_file` in `get_embedding.sh`
 1. Run the `bash get_embedding.sh`
 
-### FastText
+### FastTextCrawl
 
 Although the official host provides the fasttext pretrained on the 2013-2016 twitter data, we can still use another pretrained provided by Facebook,
 which is 2 million word vectors trained with subword information on Common Crawl (600B tokens).
@@ -35,3 +35,11 @@ which is 2 million word vectors trained with subword information on Common Crawl
 1. If we only want to use the static file, we can just find all words in the .vec file
 1. However, as we want to utilize the subword info to cope with the OOV, we need to use the .bin file
 1. Just run the `bash get_embedding.sh`
+
+### hashTag
+
+Use the Fasttext to get the embedding of each hashTag. First we collect all hashtags, then run the fasttext on it and get hashtag2vec.
+Then we can process all tweets. If a tweet contains more than one hashtags, we choose to average the none-zero vectors of it.
+
+1. Here we use the fasttext train on tweets, which is provided by the host
+1. Direct run the `bash get_embedding.sh`

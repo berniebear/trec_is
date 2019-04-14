@@ -10,7 +10,7 @@ class Preprocess(object):
     def __init__(self, args, tweetid_list: List[str], tweet_content_list: List[dict], label2id: dict):
         """
         Use feature_used to control which features are used for sentence-level feature extraction.
-            Currently available features: 'hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove'
+            Currently available features: 'hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'hashtag'
             Todo: add 'glove_keywords'
         :param args:
         :param tweetid_list:
@@ -26,7 +26,7 @@ class Preprocess(object):
         self.tweetid2feature = dict()
         self.feature_len = None
         self.feature_collection = []
-        self.feature_used = ['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'fasttext_crawl']
+        self.feature_used = ['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'fasttext_crawl', 'hashtag']
 
     def _collect_feature(self, feature, feat_name):
         self.feature_collection.append(feature)
@@ -77,6 +77,12 @@ class Preprocess(object):
                                                       self.args.fasttext_crawl_vec_file, 'fasttext-crawl')
             crawl_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2crawl_vec, 'fasttext-crawl')
             self._collect_feature(crawl_feature, 'fasttext-crawl')
+
+        if 'hashtag' in self.feature_used:
+            tweetid2hashtag_vec = utils.get_tweetid2vec(self.args.tweet_id_out_file,
+                                                        self.args.hashtag_vec_file, 'hashtag')
+            hashtag_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2hashtag_vec, 'hashtag')
+            self._collect_feature(hashtag_feature, 'hashtag')
 
         if 'glove_keywords' in self.feature_used:
             raise NotImplementedError("The glove_keywords need to be adapted from Xinyu wrapper")

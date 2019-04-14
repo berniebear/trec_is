@@ -163,7 +163,9 @@ The average acc score is 0.40 and the average f1 score is 0.55
 
 When use late fusion, the f1 score will drop a lot.
 
-When use random forest `--cross_validate --model rf`
+
+
+When use random forest `--cross_validate --model rf` with `['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove']`
 ```
 2019-04-11 18:40:46,411 - root - INFO - The average accuracy score is 0.6419636810421194
 2019-04-11 18:40:46,411 - root - INFO - The average precision score is 0.6434336557411932
@@ -171,11 +173,18 @@ When use random forest `--cross_validate --model rf`
 2019-04-11 18:40:46,411 - root - INFO - The average f1 score is 0.7783424367579415
 ```
 
+After adding `fasttext_crawl` the performance increase a little bit
+
+```
+2019-04-12 01:36:05,115 - root - INFO - The average accuracy score is 0.6432953271387535
+2019-04-12 01:36:05,116 - root - INFO - The average precision score is 0.6444531168264113
+2019-04-12 01:36:05,116 - root - INFO - The average recall score is 0.9854160962884855
+2019-04-12 01:36:05,116 - root - INFO - The average f1 score is 0.7792608064917799
+```
+
 ## Todo
-- Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
 - Multitask: use the hashtag as the label and try to predict it.
 - Read official fasttext ipython notebook to figure out why it performs so high (I guess it dues to parameter search)
-- Use fasttext trained on other dataset (currently we use the fasttext trained by tweets provided by the host)
 - First clasify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
 - Hand-crafted rule feature for each type
 - Add feature for each event (the type/title/narr tag in the event)
@@ -187,6 +196,21 @@ When use random forest `--cross_validate --model rf`
 - Use time to predict the priority of tweets, and give high priority tweets more weights in train
 - Use indicator terms (such as forming a bag of words) in 2018 training data, because it is a quite important label provided by human labelers
 - Retrain skip-thought on additional data
+- Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
+
+
+### Apr12 Discussion
+Junpei:
+- [done] Add Hashtag feature
+- Tune models
+- Event-wise model. By the way, the event of each test tweet will be informed, so we can manually choose classifier for each event
+- Add neural models
+
+Xinyu:
+- Add other handcrafted feature, read CBNU paper (last year first prize) and adopt some hand-crafted features
+- Temporal information feature
+- Additional data feature (from the additional data collected)
+- image feature classifier
 
 ### Mar29 Discussion
 
@@ -197,13 +221,13 @@ Junpei:
 - [done] Check with host if additional data could be used
 - [half-done] Install the CUDA and other dependencies. Need Bernie to reboot and abandon the secure boot of Ubuntu
 - [done] Add Glove to feature
-- A classifier to classify event (Event-wise model) However, the event of each test tweet will be informed, so we can manually choose classifier for each event?
+- [done] Use fasttext trained on other dataset (currently we use the fasttext trained by tweets provided by the host)
 
 Xinyu:
 - News extract feature
-- Explore the data to see if the number of images is large enough and useful
-- Manually check if data timestep contains useful information
-- Natural Disaster Dataset. As shown in the TREC-IS official website, there are six general events: bombing, earthquake, flood, hurricane, wildfire, shooting. 
+- [done] Explore the data to see if the number of images is large enough and useful
+- [done] Manually check if data timestep contains useful information
+- [done] Natural Disaster Dataset. As shown in the TREC-IS official website, there are six general events: bombing, earthquake, flood, hurricane, wildfire, shooting. 
 The description of each type of general event could be found in its corresponding pdf ("Event Type Profiles" in [webpage](http://dcs.gla.ac.uk/~richardm/TREC_IS/)). 
 
 Bernie:

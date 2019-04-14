@@ -294,7 +294,7 @@ def get_tweetid2vec(tweetid_file: str, vec_file: str, feat_name: str) -> Dict[st
     """
     if feat_name == 'bert':
         return get_tweetid2bertvec(tweetid_file, vec_file)
-    elif feat_name == 'skip-thought' or feat_name == 'fasttext-crawl':
+    elif feat_name == 'skip-thought' or feat_name == 'fasttext-crawl' or feat_name == 'hashtag':
         return get_tweetid2vec_by_npy(tweetid_file, vec_file)
     else:
         tweetid2vec = dict()
