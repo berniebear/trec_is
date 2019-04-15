@@ -31,6 +31,7 @@ def main():
     logger = set_logging(args)
     logger.info("Here is the arguments of this running:")
     logger.info("{}".format(args))
+    utils.check_args_conflict(args)
 
     # Set the file contains data for training and test
     label_file = os.path.join(args.data_dir, 'ITR-H.types.v2.json')
@@ -69,23 +70,30 @@ def main():
     preprocess = Preprocess(args, tweetid_list, tweet_content_list, label2id)
     preprocess.extract_features()
 
-    # Step2. Train or Cross-validation
+    # Step2. Train and Cross-validation
     data_x, data_y = preprocess.extract_train_data(formal_train_file)
-    train = Train(args, data_x, data_y, id2label, preprocess.feature_len)
-    if args.train_on_small:
-        # To see if the additional data is helpful
-        assert args.cross_validate is True
-        small_x, small_y = preprocess.extract_train_data(os.path.join(args.data_dir, '2018-train.txt'))
-        train.train(small_x, small_y)
-    train.train()
+    if args.event_wise:
+        metrics_collect = []
+        for event_type in utils.idx2event_type:
+            it_data_x, it_data_y = data_x[event_type], data_y[event_type]
+            train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len)
+            metrics = train.train()
+            metrics_collect.append((metrics, it_data_x.shape[0]))
+            utils.get_final_metrics(metrics_collect, train.metric_names)
+    else:
+        train = Train(args, data_x, data_y, id2label, preprocess.feature_len)
+        if args.train_on_small:
+            small_x, small_y = preprocess.extract_train_data(os.path.join(args.data_dir, '2018-train.txt'))
+            train.train(small_x, small_y)
+        train.train()
 
-    # Step3. Predict
-    predict_file = os.path.join(args.out_dir, "predict.txt")
-    test_data_x, test_tweetid_list, tweetid2idx, tweetid2incident = preprocess.extract_test_data(test_file)
-    train.predict(test_data_x, test_tweetid_list, tweetid2idx, tweetid2incident,
-                  id2label, short2long_label, majority_label, predict_file)
-    utils.gzip_compress_file(predict_file)
-    evaluate(test_label_file_list, predict_file + ".gz", label_file, args.out_dir)
+        # Step3. Predict if needed (don't need for cross-validation)
+        predict_file = os.path.join(args.out_dir, "predict.txt")
+        test_data_x, test_tweetid_list, tweetid2idx, tweetid2incident = preprocess.extract_test_data(test_file)
+        train.predict(test_data_x, test_tweetid_list, tweetid2idx, tweetid2incident,
+                      id2label, short2long_label, majority_label, predict_file)
+        utils.gzip_compress_file(predict_file)
+        evaluate(test_label_file_list, predict_file + ".gz", label_file, args.out_dir)
 
 
 if __name__ == '__main__':

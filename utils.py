@@ -1,6 +1,5 @@
 import os
 import re
-import pickle
 import logging
 import json
 from typing import List, Dict
@@ -9,7 +8,6 @@ from scipy.sparse import csr_matrix
 
 # For processing tweets
 from sklearn.feature_extraction.text import TfidfVectorizer
-from gensim.models.fasttext import FastText
 from nltk.stem import PorterStemmer
 from nltk.tokenize import TweetTokenizer
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -18,6 +16,30 @@ tweet_tokenizer = TweetTokenizer()
 sentiment_analyzer = SentimentIntensityAnalyzer()
 
 logger = logging.getLogger()
+
+idx2event_type = ['boombing', 'earthquake', 'flood', 'typhoon', 'wildfire', 'shooting']
+event2type = {'costaRicaEarthquake2012': 'earthquake',
+              'fireColorado2012': 'wildfire',
+              'floodColorado2013': 'flood',
+              'typhoonPablo2012': 'typhoon',
+              'laAirportShooting2013': 'shooting',
+              'westTexasExplosion2013': 'boombing',
+              'guatemalaEarthquake2012': 'earthquake',
+              'italyEarthquakes2012': 'earthquake',
+              'philipinnesFloods2012': 'flood',
+              'albertaFloods2013': 'flood',
+              'australiaBushfire2013': 'wildfire',
+              'bostonBombings2013': 'boombing',
+              'manilaFloods2013': 'flood',
+              'queenslandFloods2013': 'flood',
+              'typhoonYolanda2013': 'typhoon',
+              'joplinTornado2011': 'typhoon',
+              'chileEarthquake2014': 'earthquake',
+              'typhoonHagupit2014': 'typhoon',
+              'nepalEarthquake2015': 'earthquake',
+              'flSchoolShooting2018': 'shooting',
+              'parisAttacks2015': 'boombing'}
+assert len(set(event2type.values())) == 6
 
 
 class GloveVectorizer(object):
@@ -62,6 +84,36 @@ def prepare_folders(args):
         os.mkdir(args.model_dir)
 
 
+def check_args_conflict(args):
+    """
+    Because some arguments cannot be set to True or False together
+    :param args:
+    :return:
+    """
+    if args.event_wise or args.train_on_small:
+        assert args.cross_validate is True
+    if args.event_wise:
+        assert args.train_on_small is False
+
+
+def get_final_metrics(metrics_collect, metrics_names: List[str]):
+    """
+    Get the metrics for each event type, as well as the number of data for each event type, calculate the weighted avg
+    :param metrics_collect: List[(Dict[str, float], int)]
+    :param metrics_names:
+    :return:
+    """
+    accumulate_res = {metrics_name: 0.0 for metrics_name in metrics_names}
+    count = {metrics_name: 0 for metrics_name in metrics_names}
+    for metrics, data_num in metrics_collect:
+        for metric_name, val in metrics.items():
+            accumulate_res[metric_name] += val * data_num
+            count[metric_name] += data_num
+    for metrics_name in metrics_names:
+        accumulate_res[metrics_name] /= count[metrics_name]
+    logger.info("The final evaluation metrics val for event-wise model is {}".format(accumulate_res))
+
+
 def formalize_train_file(origin_train_file: str, formalized_train_file: str):
     fout = open(formalized_train_file, 'w', encoding='utf8')
     formalize_helper(origin_train_file, fout)
@@ -79,11 +131,17 @@ def formalize_helper(filename, fout):
     with open(filename, 'r', encoding='utf8') as f:
         train_file_content = json.load(f)
         for event in train_file_content['events']:
+            eventid = event['eventid']
+            # To handle data split of the event name which is not exactly the same as in offcial doc
+            if 'nepalEarthquake2015S' == eventid[:len('nepalEarthquake2015S')]:
+                eventid = 'nepalEarthquake2015'
+            if 'typhoonHagupit2014S' == eventid[:len('typhoonHagupit2014S')]:
+                eventid = 'typhoonHagupit2014'
             for tweet in event['tweets']:
                 tweetid = tweet['postID']
                 label_list = tweet['categories']
                 priority = tweet['priority']
-                fout.write('{0}\t{1}\t{2}\n'.format(tweetid, ','.join(label_list), priority))
+                fout.write('{0}\t{1}\t{2}\t{3}\n'.format(tweetid, ','.join(label_list), priority, event2type[eventid]))
 
 
 def merge_files(filenames: List[str], outfile: str):
@@ -294,19 +352,18 @@ def get_tweetid2vec(tweetid_file: str, vec_file: str, feat_name: str) -> Dict[st
     """
     if feat_name == 'bert':
         return get_tweetid2bertvec(tweetid_file, vec_file)
-    elif feat_name == 'skip-thought' or feat_name == 'fasttext-crawl' or feat_name == 'hashtag':
-        return get_tweetid2vec_by_npy(tweetid_file, vec_file)
     else:
-        tweetid2vec = dict()
-        tweetid_list = []
-        with open(tweetid_file, 'r', encoding='utf8') as f:
-            for i, line in enumerate(f):
-                tweetid = line.strip()
-                tweetid_list.append(tweetid)
-        with open(vec_file, 'r', encoding='utf8') as f:
-            for i, line in enumerate(f):
-                tweetid2vec[tweetid_list[i]] = json.loads(line.strip())
-        return tweetid2vec
+        return get_tweetid2vec_by_npy(tweetid_file, vec_file)
+    # tweetid2vec = dict()
+    # tweetid_list = []
+    # with open(tweetid_file, 'r', encoding='utf8') as f:
+    #     for i, line in enumerate(f):
+    #         tweetid = line.strip()
+    #         tweetid_list.append(tweetid)
+    # with open(vec_file, 'r', encoding='utf8') as f:
+    #     for i, line in enumerate(f):
+    #         tweetid2vec[tweetid_list[i]] = json.loads(line.strip())
+    # return tweetid2vec
 
 
 def get_tweetid2bertvec(tweetid_file: str, bert_vec_file: str) -> Dict[str, List[float]]:
@@ -375,11 +432,12 @@ def extract_by_word_embed(texts: list, vectorizer, analyzer,
     if merge == 'avg':
         # Get the simple average feature
         avg_feature = []
-        count_miss = 0
+        count_miss, count_total = 0, 0
         for sentence in texts:
             tokenized = [normalize_for_fasttext(t) for t in analyzer(sentence)]
             wvs = []
             for t in tokenized:
+                count_total += 1
                 try:
                     token_vec = vectorizer.wv[t]
                     # norm = np.linalg.norm(token_vec)
@@ -396,7 +454,7 @@ def extract_by_word_embed(texts: list, vectorizer, analyzer,
         fasttext_feature = np.asarray(avg_feature)  # [sent_num, embed_dim]
         assert len(fasttext_feature.shape) == 2, \
             "The shape for {0} of avg_feature is {1}".format(embed_name, fasttext_feature.shape)
-        print_to_log("There are {0} words missed by the {1} in tweets".format(count_miss, embed_name))
+        print_to_log("There are {0}/{1} words missed by the {2} in tweets".format(count_miss, count_total, embed_name))
 
     elif merge == 'weighted':
         # Get the weighted sum feature by tf-idf score

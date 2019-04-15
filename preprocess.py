@@ -10,7 +10,8 @@ class Preprocess(object):
     def __init__(self, args, tweetid_list: List[str], tweet_content_list: List[dict], label2id: dict):
         """
         Use feature_used to control which features are used for sentence-level feature extraction.
-            Currently available features: 'hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'hashtag'
+            Currently available features:
+                'hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'fasttext_crawl', 'hashtag'
             Todo: add 'glove_keywords'
         :param args:
         :param tweetid_list:
@@ -154,16 +155,24 @@ class Preprocess(object):
         """
         Extract data in the form of multi-label, where we treat each "tweet" as a training instance, and the label is
             recorded as a list (such as data_x = [tweetid_1_feature, tweetid_2_feature], data_y = [[0, 2, 5], [1, 5]])
+        Notice that if event_wise is True, we store data_x and data_y for each event separately
         :param filename:
         :return:
         """
         count_miss = 0
         count_total = 0
-        data_x, data_y = [], []
+
+        if self.args.event_wise:
+            data_x = {event_type: [] for event_type in utils.idx2event_type}
+            data_y = {event_type: [] for event_type in utils.idx2event_type}
+        else:
+            data_x, data_y = [], []
+
         with open(filename, 'r', encoding='utf8') as f:
             for line in f:
                 line = line.strip().split('\t')
                 tweetid = line[0]
+                event_type = line[3]
                 if self.args.cross_validate:  # The 2018train + 2018test data will not filter out any label
                     categories = [self.label2id[label] for label in line[1].split(',')]
                 else:
@@ -171,14 +180,23 @@ class Preprocess(object):
                 count_total += 1
                 if tweetid in self.tweetid2feature:
                     feature = self.tweetid2feature[tweetid]
-                    data_x.append(feature)
-                    data_y.append(categories)
+                    if self.args.event_wise:
+                        data_x[event_type].append(feature)
+                        data_y[event_type].append(categories)
+                    else:
+                        data_x.append(feature)
+                        data_y.append(categories)
                 else:
                     count_miss += 1
 
         utils.print_to_log("There are {0}/{1} tweets cannot find for {2}".format(count_miss, count_total, filename))
-        data_x, data_y = np.asarray(data_x), np.asarray(data_y)
-        print("The shape of data_x is {0}".format(data_x.shape))
+        if self.args.event_wise:
+            for event_type in utils.idx2event_type:
+                data_x[event_type] = np.asarray(data_x[event_type])
+                data_y[event_type] = np.asarray(data_y[event_type])
+        else:
+            data_x, data_y = np.asarray(data_x), np.asarray(data_y)
+
         return data_x, data_y
 
     def _extract_data_from_formalized_file_single_label(self, filename: str):

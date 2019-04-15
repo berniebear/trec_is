@@ -182,6 +182,19 @@ After adding `fasttext_crawl` the performance increase a little bit
 2019-04-12 01:36:05,116 - root - INFO - The average f1 score is 0.7792608064917799
 ```
 
+After adding `hashtag` the performance increase a little bit
+```
+2019-04-14 19:37:33,258 - root - INFO - The average accuracy score is 0.647148392731683
+2019-04-14 19:37:33,258 - root - INFO - The average precision score is 0.6484004516753854
+2019-04-14 19:37:33,258 - root - INFO - The average recall score is 0.985834526938896
+2019-04-14 19:37:33,259 - root - INFO - The average f1 score is 0.7822509304825445
+```
+
+Using event-wise model (naive bayes model with `['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'fasttext_crawl']`)
+```
+{'accuracy': 0.4555503209082257, 'precision': 0.46044030790481144, 'recall': 0.9512387607178248, 'f1': 0.6145547249635873}
+```
+
 ## Todo
 - Multitask: use the hashtag as the label and try to predict it.
 - Read official fasttext ipython notebook to figure out why it performs so high (I guess it dues to parameter search)
@@ -203,7 +216,7 @@ After adding `fasttext_crawl` the performance increase a little bit
 Junpei:
 - [done] Add Hashtag feature
 - Tune models
-- Event-wise model. By the way, the event of each test tweet will be informed, so we can manually choose classifier for each event
+- [done] Event-wise model. By the way, the event of each test tweet will be informed, so we can manually choose classifier for each event
 - Add neural models
 
 Xinyu:

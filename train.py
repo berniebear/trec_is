@@ -36,6 +36,7 @@ class Train(object):
         self.data_y = data_y
         self.id2label = id2label
         self.feature_lens = feature_lens
+        self.metric_names = ['accuracy', 'precision', 'recall', 'f1']
         self.clf: List[OneVsRestClassifier] = None
 
     def _fit_data(self, data_x, data_y):
@@ -104,7 +105,7 @@ class Train(object):
         if self.args.train_on_small:
             self._train_on_small_predict_on_large(small_x, small_y)
         if self.args.cross_validate:
-            self._cross_validate()
+            return self._cross_validate()
         self._fit_data(self.data_x, self.data_y)
 
     def _train_on_small_predict_on_large(self, small_x, small_y):
@@ -200,13 +201,14 @@ class Train(object):
         """
         Don't worry about stratified K-fold, because for cross_validate,
             if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used
+        If we are performing event-wise training, we need to return the metrics for each running (event)
         Todo: If you want to get more balanced k-fold split, you can refer to `proba_mass_split` in utils.py
         :return:
         """
         print_to_log('Use {} fold cross validation'.format(self.args.cv_num))
         kf = KFold(n_splits=self.args.cv_num)  # As StratifiedKFold doesn't support multi-label setting
-        metric_names = ['accuracy', 'precision', 'recall', 'f1']
-        metric_values = {metric_name: [] for metric_name in metric_names}
+        metric_values = {metric_name: [] for metric_name in self.metric_names}
+
         for train, test in kf.split(self.data_x, self.data_y):
             X_train = self.data_x[train]
             y_train = self.data_y[train]
@@ -215,12 +217,17 @@ class Train(object):
             self._fit_data(X_train, y_train)
             y_predict = self._predict_data(X_test)
             metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
-            for metric_name in metric_names:
+            for metric_name in self.metric_names:
                 metric_values[metric_name].append(metric_results[metric_name])
-        for metric_name in metric_names:
+
+        for metric_name in self.metric_names:
             print_to_log('The {0} score in cross validation is {1}'.format(metric_name, metric_values[metric_name]))
             print_to_log('The average {0} score is {1}'.format(metric_name, np.mean(metric_values[metric_name])))
-        quit()
+
+        if self.args.event_wise:
+            return {metric_name: np.mean(metric_values[metric_name]) for metric_name in self.metric_names}
+        else:
+            quit()
 
     def get_best_hyper_parameter(self, n_iter_search=100, r_state=1337):
         if self.args.model == 'rf':
