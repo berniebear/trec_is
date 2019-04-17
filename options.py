@@ -17,7 +17,12 @@ def get_arguments():
                         help="Use 18-train to train, and test on cross-validation test, to see if additional data helps")
     parser.add_argument("--late_fusion", action='store_true',
                         help="Don't concat features early, train models on each kind of feature, and then merge them")
-    parser.add_argument("--event_wise", action='store_true', help="Use event-wise classification")
+    parser.add_argument("--event_wise", action='store_true',
+                        help="Use event-wise classification. There are six types of events specified by the TREC-IS")
+    parser.add_argument("--search_best_parameters", action='store_true',
+                        help="Use random search to search for best parameters for each model")
+    parser.add_argument("--random_search_n_iter", type=int, default=100,
+                        help="Number of iterations to do random search (each iteration train a set of parameters)")
     # Data path
     parser.add_argument("--out_dir", type=str, default='out',
                         help="Directory contains the output things, including the log and ckpt")

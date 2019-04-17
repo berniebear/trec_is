@@ -96,6 +96,11 @@ def check_args_conflict(args):
         assert args.train_on_small is False
 
 
+def anytype_f1_scorer(y_true, y_pred, id2label):
+    y_pred = np.argmax(y_pred, axis=-1)
+    return evaluate_any_type(y_true, y_pred, id2label)['f1']
+
+
 def get_final_metrics(metrics_collect, metrics_names: List[str]):
     """
     Get the metrics for each event type, as well as the number of data for each event type, calculate the weighted avg
@@ -340,30 +345,22 @@ def extract_feature_by_dict(tweetid_list: List[str], tweetid2vec: Dict[str, List
     return np.asarray(res)
 
 
-def get_tweetid2vec(tweetid_file: str, vec_file: str, feat_name: str) -> Dict[str, List[float]]:
+def get_tweetid2vec(tweetid_file: str, vec_dir: str, feat_name: str) -> Dict[str, List[float]]:
     """
     The file of tweets content is args.tweet_text_out_file
     The file of corresponding feature vector (such as bert or skip-thought) is vec_file
     The file of tweets id is tweetid_file
     :param tweetid_file:
-    :param vec_file:
+    :param vec_dir: directory that contains vec file
     :param feat_name:
     :return:
     """
     if feat_name == 'bert':
+        vec_file = os.path.join(vec_dir, 'bert-vec.json')
         return get_tweetid2bertvec(tweetid_file, vec_file)
     else:
+        vec_file = os.path.join(vec_dir, '{}-vec.npy'.format(feat_name))
         return get_tweetid2vec_by_npy(tweetid_file, vec_file)
-    # tweetid2vec = dict()
-    # tweetid_list = []
-    # with open(tweetid_file, 'r', encoding='utf8') as f:
-    #     for i, line in enumerate(f):
-    #         tweetid = line.strip()
-    #         tweetid_list.append(tweetid)
-    # with open(vec_file, 'r', encoding='utf8') as f:
-    #     for i, line in enumerate(f):
-    #         tweetid2vec[tweetid_list[i]] = json.loads(line.strip())
-    # return tweetid2vec
 
 
 def get_tweetid2bertvec(tweetid_file: str, bert_vec_file: str) -> Dict[str, List[float]]:
@@ -396,86 +393,6 @@ def get_tweetid2vec_by_npy(tweetid_file: str, npy_vec_file: str) -> Dict[str, Li
             tweetid = line.strip()
             tweetid2vec[tweetid] = feat_vectors[i].tolist()
     return tweetid2vec
-
-
-def extract_by_tfidf(texts: list, vectorizer: TfidfVectorizer) -> csr_matrix:
-    return vectorizer.transform(texts)
-
-
-def extract_by_fasttext(texts: list, vectorizer, analyzer,
-                        tfidf_feature: csr_matrix, tfidf_vocab: list, merge: str = 'avg'):
-    return extract_by_word_embed(texts, vectorizer, analyzer, tfidf_feature, tfidf_vocab, 'fasttext', merge)
-
-
-def extract_by_glove(texts: list, vectorizer, analyzer,
-                     tfidf_feature: csr_matrix, tfidf_vocab: list, merge: str = 'avg'):
-    return extract_by_word_embed(texts, vectorizer, analyzer, tfidf_feature, tfidf_vocab, 'glove', merge)
-
-
-def extract_by_word_embed(texts: list, vectorizer, analyzer,
-                          tfidf_feature: csr_matrix, tfidf_vocab: list, embed_name: str, merge: str):
-    """
-    We get two kinds of fasttext features here, the first is the simple average,
-        the other is weighted sum according to tfidf score.
-    tfidf_feature is [sent_num, vocab_size], and by the fasttext we can get feature for the vocab [vocab_size, embed_dim]
-    Then we can use [sent_num, vocab_size] * [vocab_size, embed_dim] to get a weighted sum of [sent_num, embed_dim] feature
-    :param texts:
-    :param vectorizer:
-    :param analyzer:
-    :param tfidf_feature:
-    :param tfidf_vocab:
-    :param embed_name: fasttext or glove, here we provide a uniform API for it
-    :param merge: The type of merge for tokens to get sentence feature. 'avg' means average merging,
-            'weighted' means weighted sum according to tf-idf weight
-    :return:
-    """
-    if merge == 'avg':
-        # Get the simple average feature
-        avg_feature = []
-        count_miss, count_total = 0, 0
-        for sentence in texts:
-            tokenized = [normalize_for_fasttext(t) for t in analyzer(sentence)]
-            wvs = []
-            for t in tokenized:
-                count_total += 1
-                try:
-                    token_vec = vectorizer.wv[t]
-                    # norm = np.linalg.norm(token_vec)
-                    # normed_token_vec = token_vec / norm
-                    wvs.append(token_vec)
-                except KeyError:
-                    wvs.append(np.zeros([vectorizer.vector_size], dtype=np.float32))
-                    count_miss += 1
-            if len(wvs) == 0:
-                sentence_vec = np.zeros([vectorizer.vector_size])
-            else:
-                sentence_vec = np.mean(np.asarray(wvs), axis=0)
-            avg_feature.append(sentence_vec)
-        fasttext_feature = np.asarray(avg_feature)  # [sent_num, embed_dim]
-        assert len(fasttext_feature.shape) == 2, \
-            "The shape for {0} of avg_feature is {1}".format(embed_name, fasttext_feature.shape)
-        print_to_log("There are {0}/{1} words missed by the {2} in tweets".format(count_miss, count_total, embed_name))
-
-    elif merge == 'weighted':
-        # Get the weighted sum feature by tf-idf score
-        count_miss = 0
-        fasttext_for_vocab = []
-        for word in tfidf_vocab:
-            try:
-                fasttext_vec = vectorizer.wv[word]
-            except KeyError:
-                fasttext_vec = np.zeros([vectorizer.vector_size], dtype=np.float32)
-                count_miss += 1
-            fasttext_for_vocab.append(fasttext_vec)
-        fasttext_for_vocab = np.asarray(fasttext_for_vocab)
-        fasttext_feature = tfidf_feature.dot(fasttext_for_vocab)
-        print_to_log("There are {0}/{1} words missed by the {2} in tfidf vocab".format(
-            count_miss, tfidf_feature.shape[1], embed_name))
-
-    else:
-        raise ValueError("The value of merge {} is invalid".format(merge))
-
-    return fasttext_feature
 
 
 def extract_hand_crafted_feature(content_list: list) -> (np.ndarray, List[str]):
@@ -620,30 +537,6 @@ def gzip_compress_file(filepath):
     if os.path.isfile(former_file):
         os.remove(former_file)
     subprocess.run(["gzip", filepath])
-
-
-def normalize_for_fasttext(s):
-    """
-    Given a text, cleans and normalizes it. Feel free to add your own stuff.
-    From: https://www.kaggle.com/mschumacher/using-fasttext-models-for-robust-embeddings
-    """
-    s = s.lower()
-
-    # Replace numbers and symbols with language
-    s = s.replace('&', ' and ')
-    s = s.replace('@', ' at ')
-    s = s.replace('0', 'zero')
-    s = s.replace('1', 'one')
-    s = s.replace('2', 'two')
-    s = s.replace('3', 'three')
-    s = s.replace('4', 'four')
-    s = s.replace('5', 'five')
-    s = s.replace('6', 'six')
-    s = s.replace('7', 'seven')
-    s = s.replace('8', 'eight')
-    s = s.replace('9', 'nine')
-
-    return s
 
 
 def find_true_relevant(event_id='bostonBombings2013'):

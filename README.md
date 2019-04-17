@@ -5,14 +5,25 @@ TREC Incident Stream shared task (official website [here](http://dcs.gla.ac.uk/~
 
 `Python 3.6`
 
-TensorFlow, scikit-learn==0.19.2
+`scikit-learn==0.19.2`
 
-As we don't have sudo on server, we use conda to manage all packages.
+`TensorFlow==1.12.0` (not necessary for running the main.py, but needed for extracting features by `BERT` and `Skip-thought`, please refer to `feature_tools` folder for details)
+
+If you don't have sudo on server, you can use conda to manage all packages.
 
 ### How to Run
 ```bash
 python3 main.py
 ```
+
+Use `--cross_validate` to perform cross-validation on `2018-train + 2018 test` dataset.
+
+Use `--model` to choose models (usually use naive bayes or random forest)
+
+Please refer to `options.py` to get more info about different parameters.
+
+To test the correctness of parameter search part, we can set `--search_best_parameters --random_search_n_iter 1` 
+and set the parameter in `_random_search_best_para()` to be identical with the previous used parameter.
 
 ## Task Description
 
@@ -71,9 +82,7 @@ Train: 1,335 instances, including 6 events
 
 Test: 22,216 instances, including 15 events
 
-Notice that some tweets are not accessible due to the suspend of the account
-- There are 96 such tweets in train, and 1263 in test
-
+Notice that some tweets are not accessible by Twitter API due to the suspend of the account (96 tweets in train and 1263 in test), but still accessible by the jar provided by TREC-IS host.
 ## Get Twitter according to IDs
 These datasets will be distributed as a list of tweet identifiers for each incident. Participants will
 need to fetch the actual JSON tweets using publicly available tools, such as twarc
@@ -106,7 +115,7 @@ Read and write (Access level)
 ```
 
 ## Current Result
-Baseline
+Baseline (only with hand-crafted features)
 ```
 Information Type Precision (any valid type, micro): 0.3874517740813358
 Information Type Recall (any valid type, micro): 0.6394572025052192
@@ -158,14 +167,11 @@ Currently rank 8/40 in 2018 leaderboard
 2019-04-02 22:53:14,006 - root - INFO - The average acc score is 0.3907146582553731
 2019-04-02 22:53:14,006 - root - INFO - The average f1 score is 0.5600489207951589
 ```
-2018-train and then test on cross-validation (however, it has a kind of leak, because the train is included in the cross-validation test data).
-The average acc score is 0.40 and the average f1 score is 0.55
+2018-train and then test on cross-validation (however, it has a kind of leak, because the train is included in the cross-validation test data). The average acc score is `0.40` and the average f1 score is `0.55`.
 
-When use late fusion, the f1 score will drop a lot.
+When use **late fusion**, the f1 score will drop a lot (not sure if it dues to the method to do late fusion is not tuned).
 
-
-
-When use random forest `--cross_validate --model rf` with `['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove']`
+When use **random forest** `--cross_validate --model rf` with `['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove']`
 ```
 2019-04-11 18:40:46,411 - root - INFO - The average accuracy score is 0.6419636810421194
 2019-04-11 18:40:46,411 - root - INFO - The average precision score is 0.6434336557411932
@@ -190,12 +196,23 @@ After adding `hashtag` the performance increase a little bit
 2019-04-14 19:37:33,259 - root - INFO - The average f1 score is 0.7822509304825445
 ```
 
+After setting `no_class_weight` the f1 drops to `0.7758`, so we had better always use `balanced` for the class weight.
+
 Using event-wise model (naive bayes model with `['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'fasttext_crawl']`)
 ```
 {'accuracy': 0.4555503209082257, 'precision': 0.46044030790481144, 'recall': 0.9512387607178248, 'f1': 0.6145547249635873}
 ```
 
+Using event-wise model (random forest with `['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'fasttext_crawl', 'hashtag']`)
+
+```
+The final evaluation metrics val for event-wise model is {'accuracy': 0.6712643466219029, 'precision': 0.6720118180223713, 'recall': 0.9788352416057818, 'f1': 0.7960859213911053}
+```
+
+
+
 ## Todo
+
 - Multitask: use the hashtag as the label and try to predict it.
 - Read official fasttext ipython notebook to figure out why it performs so high (I guess it dues to parameter search)
 - First clasify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
@@ -215,8 +232,9 @@ Using event-wise model (naive bayes model with `['hand_crafted', 'fasttext', 'sk
 ### Apr12 Discussion
 Junpei:
 - [done] Add Hashtag feature
-- Tune models
 - [done] Event-wise model. By the way, the event of each test tweet will be informed, so we can manually choose classifier for each event
+- Read paper "A SIMPLE BUT TOUGH-TO-BEAT BASELINE FOR SENTENCE EMBEDDINGS" and try the embedding of that method
+- Tune models (random search hyper-parameters for nb and rf and (maybe) linear svm)
 - Add neural models
 
 Xinyu:
@@ -232,7 +250,7 @@ Junpei:
 - [done] To see if the additional test data added into training is helpful (if data is noisy)
 - [done] Late fusion (train model and then average, because different features may not in the same scale; However, for graph-based model such as NB the scale will not influence it)
 - [done] Check with host if additional data could be used
-- [half-done] Install the CUDA and other dependencies. Need Bernie to reboot and abandon the secure boot of Ubuntu
+- [done] Install the CUDA and other dependencies
 - [done] Add Glove to feature
 - [done] Use fasttext trained on other dataset (currently we use the fasttext trained by tweets provided by the host)
 

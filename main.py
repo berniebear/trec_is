@@ -11,13 +11,6 @@ from evaluate import evaluate
 from utils import set_logging, prepare_folders
 import utils
 
-from nltk.tokenize import TweetTokenizer
-local_tokenizer = TweetTokenizer()
-
-
-def tokenizer_wrapper(text):
-    return local_tokenizer.tokenize(text)
-
 
 def main():
     args = get_arguments()
@@ -56,10 +49,6 @@ def main():
     # Files for external feature extraction (such as skip-thought and BERT)
     args.tweet_text_out_file = os.path.join(args.out_dir, 'tweets-clean-text.txt')
     args.tweet_id_out_file = os.path.join(args.out_dir, 'tweets-id.txt')
-    args.skipthought_vec_file = os.path.join(args.out_dir, 'skip-thought-vec.npy')
-    args.bert_vec_file = os.path.join(args.out_dir, 'bert-vec.json')
-    args.fasttext_crawl_vec_file = os.path.join(args.out_dir, 'fasttext-crawl-vec.npy')
-    args.hashtag_vec_file = os.path.join(args.out_dir, 'hashtag-vec.npy')
 
     # Step1. Preprocess and extract features for all tweets
     label2id, majority_label, short2long_label = utils.get_label2id(label_file, formal_train_file, args.cv_num)

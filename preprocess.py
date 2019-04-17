@@ -1,7 +1,5 @@
-import string
 from typing import List, Dict
 import numpy as np
-from sklearn.externals import joblib
 
 import utils
 
@@ -27,11 +25,19 @@ class Preprocess(object):
         self.tweetid2feature = dict()
         self.feature_len = None
         self.feature_collection = []
-        self.feature_used = ['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'fasttext_crawl', 'hashtag']
+        self.all_available_feats = ['hand_crafted', 'fasttext-avg', 'fasttext-tfidf', 'glove-avg', 'glove-tfidf',
+                                    'skip-thought', 'bert', 'fasttext-crawl', 'hashtag']
+        self.feature_used = ['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-avg']
+        utils.print_to_log("The feature used is {}".format(self.feature_used))
 
     def _collect_feature(self, feature, feat_name):
         self.feature_collection.append(feature)
         utils.print_to_log("The shape of {0}_feature is {1}".format(feat_name, feature.shape))
+
+    def _read_feature_from_file(self, feat_name: str):
+        tweetid2vec = utils.get_tweetid2vec(self.args.tweet_id_out_file, self.args.out_dir, feat_name)
+        feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2vec, feat_name)
+        self._collect_feature(feature, feat_name)
 
     def extract_features(self):
         """
@@ -41,52 +47,11 @@ class Preprocess(object):
         """
         hand_crafted_feature, clean_texts = utils.extract_hand_crafted_feature(self.tweet_content_list)
 
-        if 'hand_crafted' in self.feature_used:
-            self._collect_feature(hand_crafted_feature, 'hand_crafted')
-
-        if 'glove' in self.feature_used or 'fasttext' in self.feature_used:
-            tfidf_vectorizer = self._get_tfidf_vectorizer()
-            analyzer = tfidf_vectorizer.build_analyzer()
-            tfidf_feature = utils.extract_by_tfidf(clean_texts, tfidf_vectorizer)
-            if 'glove' in self.feature_used:
-                glove_vectorizer = self._get_glove_vectorizer()
-                glove_feature = utils.extract_by_glove(clean_texts, glove_vectorizer, analyzer,
-                                                       tfidf_feature, tfidf_vectorizer.get_feature_names(),
-                                                       self.args.glove_merge)
-                self._collect_feature(glove_feature, 'glove')
-            if 'fasttext' in self.feature_used:
-                fasttext_vectorizer = self._get_fasttext_vectorizer()
-                fasttext_feature = utils.extract_by_fasttext(clean_texts, fasttext_vectorizer, analyzer,
-                                                             tfidf_feature, tfidf_vectorizer.get_feature_names(),
-                                                             self.args.fasttext_merge)
-                self._collect_feature(fasttext_feature, 'fasttext')
-            del tfidf_feature
-
-        if 'skip_thought' in self.feature_used:
-            tweetid2skip_vec = utils.get_tweetid2vec(self.args.tweet_id_out_file,
-                                                     self.args.skipthought_vec_file, 'skip-thought')
-            skipthought_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2skip_vec, 'skip-thought')
-            self._collect_feature(skipthought_feature, 'skip_thought')
-
-        if 'bert' in self.feature_used:
-            tweetid2bertvec = utils.get_tweetid2vec(self.args.tweet_id_out_file, self.args.bert_vec_file, 'bert')
-            bert_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2bertvec, 'bert')
-            self._collect_feature(bert_feature, 'bert')
-
-        if 'fasttext_crawl' in self.feature_used:
-            tweetid2crawl_vec = utils.get_tweetid2vec(self.args.tweet_id_out_file,
-                                                      self.args.fasttext_crawl_vec_file, 'fasttext-crawl')
-            crawl_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2crawl_vec, 'fasttext-crawl')
-            self._collect_feature(crawl_feature, 'fasttext-crawl')
-
-        if 'hashtag' in self.feature_used:
-            tweetid2hashtag_vec = utils.get_tweetid2vec(self.args.tweet_id_out_file,
-                                                        self.args.hashtag_vec_file, 'hashtag')
-            hashtag_feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2hashtag_vec, 'hashtag')
-            self._collect_feature(hashtag_feature, 'hashtag')
-
-        if 'glove_keywords' in self.feature_used:
-            raise NotImplementedError("The glove_keywords need to be adapted from Xinyu wrapper")
+        for feat_name in self.feature_used:
+            if feat_name == 'hand_crafted':
+                self._collect_feature(hand_crafted_feature, feat_name)
+            else:
+                self._read_feature_from_file(feat_name)
 
         # Concatenate all features, and record the length of each feature for future use (such as train model for each)
         whole_feature_matrix = np.concatenate(self.feature_collection, axis=-1)
@@ -98,45 +63,6 @@ class Preprocess(object):
         assert len(self.tweetid_list) == whole_feature_matrix.shape[0]
         for i, tweetid in enumerate(self.tweetid_list):
             self.tweetid2feature[tweetid] = whole_feature_matrix[i]
-
-    def _get_tfidf_vectorizer(self):
-        if self.args.sanity_check:
-            from sklearn.feature_extraction.text import TfidfVectorizer
-            utils.print_to_log("Sanity check mode, use small data for vectorizer")
-            vectorizer = TfidfVectorizer()
-            vectorizer.fit(['This is a test document', 'This is just used for testing'])
-        else:
-            vectorizer = joblib.load(self.args.tfidf_model_path)
-        return vectorizer
-
-    def _get_fasttext_vectorizer(self):
-        from gensim.models.fasttext import FastText
-
-        if self.args.sanity_check:
-            fasttext = FastText(size=10, min_count=1, window=1)
-            cleaned_text = ['This is a test document', 'This is just used for testing', string.ascii_lowercase]
-            fasttext.build_vocab(cleaned_text)
-            fasttext.train(cleaned_text, total_examples=fasttext.corpus_count, epochs=fasttext.epochs)
-            return fasttext
-        else:
-            fasttext = FastText.load(self.args.fasttext_model_path)
-            return fasttext
-
-    def _get_glove_vectorizer(self) -> utils.GloveVectorizer:
-        if self.args.sanity_check:
-            return utils.GloveVectorizer({'a': [1.0] * 200}, 200)
-        else:
-            word2vecs = dict()
-            vec_dim = None
-            with open(self.args.glove_path, 'r', encoding='utf8') as f:
-                for line in f:
-                    line = line.strip().split()
-                    word = line[0]
-                    embedding = [float(val) for val in line[1:]]
-                    if vec_dim is None:
-                        vec_dim = len(embedding)
-                    word2vecs[word] = embedding
-            return utils.GloveVectorizer(word2vecs, vec_dim)
 
     def extract_train_data(self, train_file):
         return self._extract_data_from_formalized_file(train_file)

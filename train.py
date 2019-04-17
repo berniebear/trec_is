@@ -1,19 +1,20 @@
-from typing import List
+from typing import List, Dict
 from scipy import stats
 import numpy as np
 import pandas as pd
+import scipy
 from sklearn.model_selection import KFold, StratifiedKFold, RandomizedSearchCV
 from sklearn.linear_model import SGDClassifier
 from sklearn.svm import SVC, LinearSVC
 from sklearn.multiclass import OneVsRestClassifier
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, make_scorer
 from sklearn.metrics.pairwise import chi2_kernel
 from sklearn.preprocessing import MultiLabelBinarizer, Normalizer, MinMaxScaler, StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.utils import shuffle
 
-from utils import print_to_log
+from utils import print_to_log, anytype_f1_scorer
 import utils
 
 
@@ -102,6 +103,8 @@ class Train(object):
         self._shuffle_data()
         self._create_model()
         self.data_y = MultiLabelBinarizer(classes=[i for i in range(len(self.id2label))]).fit_transform(self.data_y)
+        if self.args.search_best_parameters:
+            self._random_search_best_para(self.args.random_search_n_iter)
         if self.args.train_on_small:
             self._train_on_small_predict_on_large(small_x, small_y)
         if self.args.cross_validate:
@@ -165,7 +168,7 @@ class Train(object):
     def _create_model(self):
         self.clf = [self._create_single_model() for i in range(len(self.feature_lens))]
 
-    def _create_single_model(self):
+    def _create_single_model(self, param=None):
         class_weight = None if self.args.no_class_weight else 'balanced'
         model_name = self.args.model
         print_to_log("The model used here is {0}".format(model_name))
@@ -180,22 +183,73 @@ class Train(object):
         elif model_name == 'svm_chi2':
             clf = SVC(kernel=chi2_kernel, class_weight=class_weight)
         elif model_name == 'bernoulli_nb':
-            clf = BernoulliNB(alpha=0.0158, binarize=0.7317, fit_prior=False)
+            if not param:
+                param = {'alpha': 0.0158, 'binarize': 0.7317, 'fit_prior': False}
+            clf = BernoulliNB(**param)
         elif model_name == 'rf':
-            rf_params = {
-                'n_estimators': 128,
-                "n_jobs": -1,
-                'class_weight': class_weight,
-                'criterion': 'gini',
-                'max_depth': 32,
-                'max_features': 113,
-                'min_samples_leaf': 2,
-                'min_samples_split': 54,
-            }
-            clf = RandomForestClassifier(**rf_params)
+            if not param:
+                param = {
+                    'n_estimators': 128,
+                    "n_jobs": -1,
+                    'class_weight': class_weight,
+                    'criterion': 'gini',
+                    'max_depth': 32,
+                    'max_features': 113,
+                    'min_samples_leaf': 2,
+                    'min_samples_split': 54,
+                }
+            clf = RandomForestClassifier(**param)
         else:
             raise NotImplementedError
-        return OneVsRestClassifier(clf)
+        return OneVsRestClassifier(clf, n_jobs=-1)
+
+    def _random_search_best_para(self, n_iter):
+        """
+        Notice that as the model clf is stored as an attribute named estimator inside the OneVsRestClassifier model,
+        we should add estimator__ as prefix for setting their parameters
+        :param n_iter:
+        :return:
+        """
+        if self.args.model == 'rf':
+            clf = RandomForestClassifier(n_estimators=128, class_weight="balanced")
+            param_dist = {
+                "estimator__max_depth": [2, 4, 8, 16, 32, 64, 128, None],
+                "estimator__max_features": scipy.stats.randint(1, 512),
+                "estimator__min_samples_split": scipy.stats.randint(2, 512),
+                "estimator__min_samples_leaf": scipy.stats.randint(2, 512),
+                "estimator__criterion": ["gini", "entropy"],
+            }
+        elif self.args.model == 'bernoulli_nb':
+            clf = BernoulliNB()
+            # param_dist = {
+            #     "estimator__alpha": scipy.stats.uniform(),
+            #     "estimator__binarize": scipy.stats.uniform(),
+            #     "estimator__fit_prior": [True, False],
+            # }
+            # Use this parameter to test
+            param_dist = {
+                "estimator__alpha": [0.0158],
+                "estimator__binarize": [0.7317],
+                "estimator__fit_prior": [False],
+            }
+        else:
+            raise ValueError("The model {} doesn't support parameter search in current stage".format(self.args.model))
+
+        clf = OneVsRestClassifier(clf, n_jobs=-1)
+        scorer = make_scorer(anytype_f1_scorer, greater_is_better=True, id2label=self.id2label)
+        random_search = RandomizedSearchCV(clf,
+                                           param_distributions=param_dist,
+                                           n_iter=n_iter,
+                                           cv=5,
+                                           scoring=scorer,
+                                           verbose=2,
+                                           n_jobs=-1,
+                                           )
+        random_search.fit(self.data_x, self.data_y)
+
+        print_to_log("best_score_:\n{}".format(random_search.best_score_))
+        print_to_log("best_params_:\n{}".format(random_search.best_params_))
+        quit()
 
     def _cross_validate(self):
         """
