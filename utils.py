@@ -90,6 +90,7 @@ def check_args_conflict(args):
     :param args:
     :return:
     """
+    assert args.cross_validate is True, "Current code focus on cross validation on 2018-train + 2018-test"
     if args.event_wise or args.train_on_small:
         assert args.cross_validate is True
     if args.event_wise:
@@ -98,7 +99,10 @@ def check_args_conflict(args):
 
 def anytype_f1_scorer(y_true, y_pred, id2label):
     y_pred = np.argmax(y_pred, axis=-1)
-    return evaluate_any_type(y_true, y_pred, id2label)['f1']
+    score = evaluate_any_type(y_true, y_pred, id2label)['f1']
+    print('y_pred shape is {}'.format(y_pred.shape))
+    print('Score is {}'.format(score))
+    return score
 
 
 def get_final_metrics(metrics_collect, metrics_names: List[str]):

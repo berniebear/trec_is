@@ -3,7 +3,7 @@ from scipy import stats
 import numpy as np
 import pandas as pd
 import scipy
-from sklearn.model_selection import KFold, StratifiedKFold, RandomizedSearchCV
+from sklearn.model_selection import KFold, StratifiedKFold, RandomizedSearchCV, ParameterSampler
 from sklearn.linear_model import SGDClassifier
 from sklearn.svm import SVC, LinearSVC
 from sklearn.multiclass import OneVsRestClassifier
@@ -165,8 +165,8 @@ class Train(object):
     def _shuffle_data(self):
         self.data_x, self.data_y = shuffle(self.data_x, self.data_y)
 
-    def _create_model(self):
-        self.clf = [self._create_single_model() for i in range(len(self.feature_lens))]
+    def _create_model(self, param=None):
+        self.clf = [self._create_single_model(param) for i in range(len(self.feature_lens))]
 
     def _create_single_model(self, param=None):
         class_weight = None if self.args.no_class_weight else 'balanced'
@@ -204,23 +204,35 @@ class Train(object):
         return OneVsRestClassifier(clf, n_jobs=-1)
 
     def _random_search_best_para(self, n_iter):
+        self._random_search_by_our_own(n_iter)
+
+    def _random_search_by_sklearn_API(self, n_iter):
         """
+        Use the RandomizedSearchCV API of sklearn, but need to customize the scoring function
+        The advantage is that it parallelized well
         Notice that as the model clf is stored as an attribute named estimator inside the OneVsRestClassifier model,
         we should add estimator__ as prefix for setting their parameters
         :param n_iter:
         :return:
         """
         if self.args.model == 'rf':
-            clf = RandomForestClassifier(n_estimators=128, class_weight="balanced")
+            clf = RandomForestClassifier(n_estimators=128, class_weight="balanced", n_jobs=-1)
+            # param_dist = {
+            #     "estimator__max_depth": [2, 4, 8, 16, 32, 64, 128, None],
+            #     "estimator__max_features": scipy.stats.randint(1, 512),
+            #     "estimator__min_samples_split": scipy.stats.randint(2, 512),
+            #     "estimator__min_samples_leaf": scipy.stats.randint(2, 512),
+            #     "estimator__criterion": ["gini", "entropy"],
+            # }
             param_dist = {
-                "estimator__max_depth": [2, 4, 8, 16, 32, 64, 128, None],
-                "estimator__max_features": scipy.stats.randint(1, 512),
-                "estimator__min_samples_split": scipy.stats.randint(2, 512),
-                "estimator__min_samples_leaf": scipy.stats.randint(2, 512),
-                "estimator__criterion": ["gini", "entropy"],
+                "estimator__max_depth": [32],
+                "estimator__max_features": [113],
+                "estimator__min_samples_split": [54],
+                "estimator__min_samples_leaf": [2],
+                "estimator__criterion": ["gini"],
             }
         elif self.args.model == 'bernoulli_nb':
-            clf = BernoulliNB()
+            clf = BernoulliNB(alpha=0.0158, binarize=0.7317)
             # param_dist = {
             #     "estimator__alpha": scipy.stats.uniform(),
             #     "estimator__binarize": scipy.stats.uniform(),
@@ -228,27 +240,66 @@ class Train(object):
             # }
             # Use this parameter to test
             param_dist = {
-                "estimator__alpha": [0.0158],
-                "estimator__binarize": [0.7317],
                 "estimator__fit_prior": [False],
             }
         else:
             raise ValueError("The model {} doesn't support parameter search in current stage".format(self.args.model))
 
         clf = OneVsRestClassifier(clf, n_jobs=-1)
+        kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
         scorer = make_scorer(anytype_f1_scorer, greater_is_better=True, id2label=self.id2label)
         random_search = RandomizedSearchCV(clf,
                                            param_distributions=param_dist,
                                            n_iter=n_iter,
-                                           cv=5,
+                                           cv=kf,
                                            scoring=scorer,
-                                           verbose=2,
+                                           verbose=1,
                                            n_jobs=-1,
                                            )
         random_search.fit(self.data_x, self.data_y)
 
         print_to_log("best_score_:\n{}".format(random_search.best_score_))
         print_to_log("best_params_:\n{}".format(random_search.best_params_))
+        quit()
+
+    def _random_search_by_our_own(self, n_iter):
+        """
+        Call our own class method to perform the random search
+        The drawback is that they cannot be performed paralleled
+        :param n_iter:
+        :return:
+        """
+        if self.args.model == 'rf':
+            param_dist = {
+                "max_depth": [2, 4, 8, 16, 32, 64, 128, None],
+                "max_features": scipy.stats.randint(1, 512),
+                "min_samples_split": scipy.stats.randint(2, 512),
+                "min_samples_leaf": scipy.stats.randint(2, 512),
+                "criterion": ["gini", "entropy"],
+            }
+        elif self.args.model == 'bernoulli_nb':
+            param_dist = {
+                "alpha": scipy.stats.uniform(),
+                "binarize": scipy.stats.uniform(),
+                "fit_prior": [True, False],
+            }
+        else:
+            raise ValueError("The model {} doesn't support parameter search in current stage".format(self.args.model))
+
+        param_list = list(ParameterSampler(param_dist, n_iter=n_iter))
+        best_f1 = 0.0
+        best_param = dict()
+        for param in param_list:
+            if self.args.model == 'rf':  # Some fix parameters of random forest
+                param.update({'n_estimators': 128, 'class_weight': "balanced", 'n_jobs': -1})
+            self._create_model(param)
+            current_f1 = self._cross_validate()
+            if current_f1 > best_f1:
+                best_f1 = current_f1
+                best_param = param
+        print_to_log("The Random search finished")
+        print_to_log("The best f1 is {}".format(best_f1))
+        print_to_log("The best parameter is {}".format(best_param))
         quit()
 
     def _cross_validate(self):
@@ -260,7 +311,8 @@ class Train(object):
         :return:
         """
         print_to_log('Use {} fold cross validation'.format(self.args.cv_num))
-        kf = KFold(n_splits=self.args.cv_num)  # As StratifiedKFold doesn't support multi-label setting
+        # As StratifiedKFold doesn't support multi-label setting
+        kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
         metric_values = {metric_name: [] for metric_name in self.metric_names}
 
         for train, test in kf.split(self.data_x, self.data_y):
@@ -272,48 +324,27 @@ class Train(object):
             y_predict = self._predict_data(X_test)
             metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
             for metric_name in self.metric_names:
-                metric_values[metric_name].append(metric_results[metric_name])
+                metric_values[metric_name].append([metric_results[metric_name], len(y_test)])
 
+        metric_weighted_avg = self._get_weighted_avg(metric_values)
         for metric_name in self.metric_names:
             print_to_log('The {0} score in cross validation is {1}'.format(metric_name, metric_values[metric_name]))
-            print_to_log('The average {0} score is {1}'.format(metric_name, np.mean(metric_values[metric_name])))
+            print_to_log('The average {0} score is {1}'.format(metric_name, metric_weighted_avg[metric_name]))
 
         if self.args.event_wise:
-            return {metric_name: np.mean(metric_values[metric_name]) for metric_name in self.metric_names}
+            return {metric_name: metric_weighted_avg[metric_name] for metric_name in self.metric_names}
+        elif self.args.search_best_parameters:
+            return metric_weighted_avg['f1']
         else:
             quit()
 
-    def get_best_hyper_parameter(self, n_iter_search=100, r_state=1337):
-        if self.args.model == 'rf':
-            self.clf = RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=r_state)
-            # specify parameters and distributions to sample from
-            param_dist = {
-                "max_depth": [2, 4, 8, 16, 32, 64, 128, None],
-                "max_features": stats.randint(1, 512),
-                "min_samples_split": stats.randint(2, 512),
-                "min_samples_leaf": stats.randint(2, 512),
-                "criterion": ["gini", "entropy"],
-            }
-        elif self.args.model == 'bernoulli_nb':
-            self.clf = BernoulliNB()
-            param_dist = {
-                "alpha": stats.uniform(),
-                "binarize": stats.uniform(),
-                "fit_prior": [True, False],
-            }
-        else:
-            raise ValueError("The model {} is not implemented for random search".format(self.args.model))
-        return self._random_search(param_dist, n_iter_search=n_iter_search, r_state=r_state)
-
-    def _random_search(self, param_dist, n_iter_search=20, r_state=1337):
-        random_search = RandomizedSearchCV(self.clf,
-                                           param_distributions=param_dist,
-                                           n_iter=n_iter_search,
-                                           cv=10,
-                                           scoring="f1_macro",
-                                           random_state=r_state,
-                                           verbose=2,
-                                           n_jobs=-1,
-                                           )
-        random_search.fit(self.data_x, self.data_y)
-        return random_search.best_score_, random_search.best_params_
+    def _get_weighted_avg(self, metric_values):
+        metric_accumulate = {metric_name: 0.0 for metric_name in self.metric_names}
+        count = {metric_name: 0 for metric_name in self.metric_names}
+        for metric_name in self.metric_names:
+            for value, length in metric_values[metric_name]:
+                metric_accumulate[metric_name] += value * length
+                count[metric_name] += length
+        for metric_name in self.metric_names:
+            metric_accumulate[metric_name] /= count[metric_name]
+        return metric_accumulate

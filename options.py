@@ -34,9 +34,6 @@ def get_arguments():
                         help="Name of logfile, could use Date such as Apr25")
     parser.add_argument("--use_tweets_by_API", action='store_true',
                         help="Use the tweets file gotten by Twitter Developper API, instead of using the jar file")
-    parser.add_argument("--tfidf_model_path", type=str, default='../data/2013to2016_tfidf_vectorizer_20190109.pkl')
-    parser.add_argument("--fasttext_model_path", type=str, default='../data/text_sample_2013to2016_gensim_200.model')
-    parser.add_argument("--glove_path", type=str, default='../data/glove.twitter.27B.200d.txt')
     # Features
     parser.add_argument("--fasttext_merge", type=str, default='avg',
                         help='avg | weighted')
