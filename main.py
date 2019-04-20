@@ -63,12 +63,15 @@ def main():
     data_x, data_y = preprocess.extract_train_data(formal_train_file)
     if args.event_wise:
         metrics_collect = []
+        metric_names = None
         for event_type in utils.idx2event_type:
             it_data_x, it_data_y = data_x[event_type], data_y[event_type]
             train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len)
             metrics = train.train()
             metrics_collect.append((metrics, it_data_x.shape[0]))
-            utils.get_final_metrics(metrics_collect, train.metric_names)
+            if metric_names is None:
+                metric_names = train.metric_names
+        utils.get_final_metrics(metrics_collect, metric_names)
     else:
         train = Train(args, data_x, data_y, id2label, preprocess.feature_len)
         if args.train_on_small:

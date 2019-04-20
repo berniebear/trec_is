@@ -1,5 +1,7 @@
 from typing import List, Dict
 import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import normalize
 
 import utils
 
@@ -27,7 +29,7 @@ class Preprocess(object):
         self.feature_collection = []
         self.all_available_feats = ['hand_crafted', 'fasttext-avg', 'fasttext-tfidf', 'glove-avg', 'glove-tfidf',
                                     'skip-thought', 'bert', 'fasttext-crawl', 'hashtag']
-        self.feature_used = ['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-avg']
+        self.feature_used = ['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']
         utils.print_to_log("The feature used is {}".format(self.feature_used))
 
     def _collect_feature(self, feature, feat_name):
@@ -37,6 +39,11 @@ class Preprocess(object):
     def _read_feature_from_file(self, feat_name: str):
         tweetid2vec = utils.get_tweetid2vec(self.args.tweet_id_out_file, self.args.out_dir, feat_name)
         feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2vec, feat_name)
+        if self.args.use_pca:
+            pca = PCA(n_components=self.args.pca_dim)
+            feature = pca.fit_transform(feature)
+        if self.args.normalize_feat:
+            feature = normalize(feature)
         self._collect_feature(feature, feat_name)
 
     def extract_features(self):

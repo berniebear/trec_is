@@ -50,30 +50,6 @@ def load_glove(glove_path: str):
     return word2vecs, vec_dim
 
 
-# def extract_by_glove(sent_list: List[str]) -> np.ndarray:
-#     glove_path = os.path.join('../../../data/glove.twitter.27B.200d.txt')
-#
-#     word2vecs, vec_dim = load_glove(glove_path)
-#
-#     features = []
-#     count_miss, count_total = 0, 0
-#     for sent in sent_list:
-#         sent_feat = []
-#         for word in sent.split():
-#             count_total += 1
-#             if word in word2vecs:
-#                 sent_feat.append(word2vecs[word])
-#             else:
-#                 count_miss += 1
-#         if len(sent_feat) == 0:
-#             features.append(np.zeros([vec_dim], dtype=np.float))
-#         else:
-#             features.append(np.mean(np.asarray(sent_feat), axis=0))
-#
-#     print("There are {0}/{1} words missed by the glove in tweets".format(count_miss, count_total))
-#     return np.asarray(features)
-
-
 def read_clean_texts(input_file):
     sent_list = []
     empty_sent = total_sent = 0

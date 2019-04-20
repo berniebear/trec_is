@@ -204,15 +204,38 @@ Using event-wise model (naive bayes model with `['hand_crafted', 'fasttext', 'sk
 ```
 
 Using event-wise model (random forest with `['hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'fasttext_crawl', 'hashtag']`)
-
 ```
 The final evaluation metrics val for event-wise model is {'accuracy': 0.6712643466219029, 'precision': 0.6720118180223713, 'recall': 0.9788352416057818, 'f1': 0.7960859213911053}
 ```
 
+#### The following is all about NB model
+
+After searching parameter for NB with `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-avg']`
+```
+F1: 0.6709
+{'alpha': 0.848978980643246, 'binarize': 0.30859955544919404, 'fit_prior': True}
+```
+Use `event_wise` for NB with those parameters get `0.7047` F1.
+```
+2019-04-18 15:04:57,564 - root - INFO - The final evaluation metrics val for event-wise model is {'accuracy': 0.5564857536983304, 'precision': 0.5606054867072, 'recall': 0.96216209768519, 'f1': 0.7047413283261292}
+```
+
+Using `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-avg', 'fasttext-crawl', 'hashtag]` is `0.6040`.
+Using `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-avg', 'fasttext-crawl']` is `0.6722`.
+(so in following experiments we will discard the `hashtag` feature)
+
+Using `PCA=100` we get `0.6909` (after testing PCA=50, 100, 150, we find 100 performs best)
+
+After doing leave-one-out feature selection, I decide to keep those features: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`
+The current performance with bernoulli NB is `0.6768`, after adding `--pca` it achieves `0.6936`
+
+
+
 
 
 ## Todo
-
+- Late fusion
+- Round-trip translation / paraphrase (SemEval 2015 Task 1) to do data augmentation
 - Multitask: use the hashtag as the label and try to predict it.
 - Read official fasttext ipython notebook to figure out why it performs so high (I guess it dues to parameter search)
 - First clasify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
@@ -228,20 +251,30 @@ The final evaluation metrics val for event-wise model is {'accuracy': 0.67126434
 - Retrain skip-thought on additional data
 - Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
 
+### Apr18 Discussion
+
+Junpei:
+- [done] Leave one out to select features (the `fasttext-tfidf` and `glove-avg` and `hashtag` are removed)
+- Add neural models
+
+Xinyu:
+
+- plug fasttext trained on Twitter data
+- Add other handcrafted feature, read CBNU paper (last year first prize) and adopt some hand-crafted features
+- Temporal information feature
+- Additional data feature (from the additional data collected)
+- image feature classifier
+
 
 ### Apr12 Discussion
 Junpei:
 - [done] Add Hashtag feature
 - [done] Event-wise model. By the way, the event of each test tweet will be informed, so we can manually choose classifier for each event
-- Read paper "A SIMPLE BUT TOUGH-TO-BEAT BASELINE FOR SENTENCE EMBEDDINGS" and try the embedding of that method
-- Tune models (random search hyper-parameters for nb and rf and (maybe) linear svm)
-- Add neural models
+- [done] Read paper "A SIMPLE BUT TOUGH-TO-BEAT BASELINE FOR SENTENCE EMBEDDINGS" and try the embedding of that method
+- [done] Tune models (random search hyper-parameters for nb and rf and (maybe) linear svm)
 
 Xinyu:
-- Add other handcrafted feature, read CBNU paper (last year first prize) and adopt some hand-crafted features
-- Temporal information feature
-- Additional data feature (from the additional data collected)
-- image feature classifier
+- All things not done, move to 'Apr18 Discussion'
 
 ### Mar29 Discussion
 

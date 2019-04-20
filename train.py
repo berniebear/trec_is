@@ -11,7 +11,7 @@ from sklearn.metrics import f1_score, make_scorer
 from sklearn.metrics.pairwise import chi2_kernel
 from sklearn.preprocessing import MultiLabelBinarizer, Normalizer, MinMaxScaler, StandardScaler
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.naive_bayes import BernoulliNB
+from sklearn.naive_bayes import BernoulliNB, GaussianNB
 from sklearn.utils import shuffle
 
 from utils import print_to_log, anytype_f1_scorer
@@ -182,9 +182,11 @@ class Train(object):
             clf = SVC(kernel='rbf', class_weight=class_weight, gamma='scale')
         elif model_name == 'svm_chi2':
             clf = SVC(kernel=chi2_kernel, class_weight=class_weight)
+        elif model_name == 'gs_nb':
+            clf = GaussianNB()
         elif model_name == 'bernoulli_nb':
             if not param:
-                param = {'alpha': 0.0158, 'binarize': 0.7317, 'fit_prior': False}
+                param = {'alpha': 0.8490, 'binarize': 0.3086, 'fit_prior': True}
             clf = BernoulliNB(**param)
         elif model_name == 'rf':
             if not param:
@@ -204,12 +206,14 @@ class Train(object):
         return OneVsRestClassifier(clf, n_jobs=-1)
 
     def _random_search_best_para(self, n_iter):
-        self._random_search_by_our_own(n_iter)
+        self._random_search_by_sklearn(n_iter)
 
-    def _random_search_by_sklearn_API(self, n_iter):
+    def _random_search_by_sklearn(self, n_iter):
         """
         Use the RandomizedSearchCV API of sklearn, but need to customize the scoring function
-        The advantage is that it parallelized well
+        The advantage is that it parallelized well (However, according to the warning
+            "Multiprocessing-backed parallel loops cannot be nested", if the model is parallelized,
+            the random search will be serielized automatically)
         Notice that as the model clf is stored as an attribute named estimator inside the OneVsRestClassifier model,
         we should add estimator__ as prefix for setting their parameters
         :param n_iter:
@@ -232,7 +236,7 @@ class Train(object):
                 "estimator__criterion": ["gini"],
             }
         elif self.args.model == 'bernoulli_nb':
-            clf = BernoulliNB(alpha=0.0158, binarize=0.7317)
+            clf = BernoulliNB(alpha=0.8490, binarize=0.3086)
             # param_dist = {
             #     "estimator__alpha": scipy.stats.uniform(),
             #     "estimator__binarize": scipy.stats.uniform(),
@@ -240,7 +244,7 @@ class Train(object):
             # }
             # Use this parameter to test
             param_dist = {
-                "estimator__fit_prior": [False],
+                "estimator__fit_prior": [True]
             }
         else:
             raise ValueError("The model {} doesn't support parameter search in current stage".format(self.args.model))
@@ -258,6 +262,7 @@ class Train(object):
                                            )
         random_search.fit(self.data_x, self.data_y)
 
+        print_to_log("Random Search finished!")
         print_to_log("best_score_:\n{}".format(random_search.best_score_))
         print_to_log("best_params_:\n{}".format(random_search.best_params_))
         quit()
@@ -289,7 +294,7 @@ class Train(object):
         param_list = list(ParameterSampler(param_dist, n_iter=n_iter))
         best_f1 = 0.0
         best_param = dict()
-        for param in param_list:
+        for i, param in enumerate(param_list):
             if self.args.model == 'rf':  # Some fix parameters of random forest
                 param.update({'n_estimators': 128, 'class_weight': "balanced", 'n_jobs': -1})
             self._create_model(param)
@@ -297,7 +302,11 @@ class Train(object):
             if current_f1 > best_f1:
                 best_f1 = current_f1
                 best_param = param
-        print_to_log("The Random search finished")
+            if (i + 1) % self.args.search_print_interval == 0:
+                print_to_log("After searching {0} sets of parameters, current best is {1}, best F1 is {2}".format(
+                    i + 1, best_param, best_f1))
+
+        print_to_log("The Random search finished!")
         print_to_log("The best f1 is {}".format(best_f1))
         print_to_log("The best parameter is {}".format(best_param))
         quit()

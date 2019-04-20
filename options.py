@@ -1,4 +1,3 @@
-import os
 import argparse
 
 
@@ -23,6 +22,8 @@ def get_arguments():
                         help="Use random search to search for best parameters for each model")
     parser.add_argument("--random_search_n_iter", type=int, default=100,
                         help="Number of iterations to do random search (each iteration train a set of parameters)")
+    parser.add_argument("--search_print_interval", type=int, default=20,
+                        help="As random forest has much longer training time, suggested value is 3, and nb can use 20")
     # Data path
     parser.add_argument("--out_dir", type=str, default='out',
                         help="Directory contains the output things, including the log and ckpt")
@@ -39,6 +40,12 @@ def get_arguments():
                         help='avg | weighted')
     parser.add_argument("--glove_merge", type=str, default='avg',
                         help='avg | weighted')
+    parser.add_argument("--use_pca", action="store_true",
+                        help="Use PCA to reduce dimension of each kind of feature")
+    parser.add_argument("--pca_dim", type=int, default=100,
+                        help="Dimension after using PCA")
+    parser.add_argument("--normalize_feat", action="store_true",
+                        help="Normalize each feature when reading them from file")
     # Model
     parser.add_argument("--model", type=str, default='bernoulli_nb',
                         help="bernoulli_nb | rf | sgd_svm")
