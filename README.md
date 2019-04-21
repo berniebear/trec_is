@@ -235,14 +235,13 @@ After adding normalization, no matter with PCA or not, the performance drops a l
 After adding `late_fusion` the performance drops (from `0.6936` to `0.6368`) So we may not use late fusion.
 
 
+#### The following is all about Random Forest model
+`--pca` can reach `0.7832`.
 
 ## Todo
-- Figure out the diff between sklearn Search and my own Search
 - Round-trip translation / paraphrase (SemEval 2015 Task 1) to do data augmentation
 - Multitask: use the hashtag as the label and try to predict it.
 - First clasify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
-- Hand-crafted rule feature for each type
-- Add feature for each event (the type/title/narr tag in the event)
 - Use a better method to predict the importance score
 - Use generative model, try to model the joint distribution of p(x,y) and can extract the feature to feed into the descriptive model (similar to ELMo)
 - Borrow idea from Twitter Sentiment Analysis (including pre-processing methods)
@@ -256,6 +255,7 @@ After adding `late_fusion` the performance drops (from `0.6936` to `0.6368`) So 
 ### Apr18 Discussion
 
 Junpei:
+- [done] Transfer the Parameter Search to sklearn API
 - [done] Try late fusion for current new parameters (not good)
 - [done] Normalization features before concatenate them
 - [done] Leave one out to select features (the `fasttext-tfidf` and `glove-avg` and `hashtag` are removed)

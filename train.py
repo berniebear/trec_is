@@ -215,41 +215,39 @@ class Train(object):
             "Multiprocessing-backed parallel loops cannot be nested", if the model is parallelized,
             the random search will be serielized automatically)
         Notice that as the model clf is stored as an attribute named estimator inside the OneVsRestClassifier model,
-        we should add estimator__ as prefix for setting their parameters
+            we should add "estimator__" as prefix for setting their parameters in the OneVsRestClassifier wrapper
+        Another thing to notice is that Because parallel jobs cannot be nested, we can set model to be paralled and
+            search to be sequential, or model to be sequential but search to be parallel.
         :param n_iter:
         :return:
         """
         if self.args.model == 'rf':
-            clf = RandomForestClassifier(n_estimators=128, class_weight="balanced", n_jobs=-1)
-            # param_dist = {
-            #     "estimator__max_depth": [2, 4, 8, 16, 32, 64, 128, None],
-            #     "estimator__max_features": scipy.stats.randint(1, 512),
-            #     "estimator__min_samples_split": scipy.stats.randint(2, 512),
-            #     "estimator__min_samples_leaf": scipy.stats.randint(2, 512),
-            #     "estimator__criterion": ["gini", "entropy"],
-            # }
+            clf = RandomForestClassifier(n_estimators=128, class_weight="balanced", n_jobs=1)
             param_dist = {
-                "estimator__max_depth": [32],
-                "estimator__max_features": [113],
-                "estimator__min_samples_split": [54],
-                "estimator__min_samples_leaf": [2],
-                "estimator__criterion": ["gini"],
+                "estimator__max_depth": [2, 4, 8, 16, 32, 64, 128, None],
+                "estimator__max_features": scipy.stats.randint(1, 512),
+                "estimator__min_samples_split": scipy.stats.randint(2, 512),
+                "estimator__min_samples_leaf": scipy.stats.randint(2, 512),
+                "estimator__criterion": ["gini", "entropy"],
             }
         elif self.args.model == 'bernoulli_nb':
-            clf = BernoulliNB(alpha=0.8490, binarize=0.3086)
-            # param_dist = {
-            #     "estimator__alpha": scipy.stats.uniform(),
-            #     "estimator__binarize": scipy.stats.uniform(),
-            #     "estimator__fit_prior": [True, False],
-            # }
-            # Use this parameter to test
+            clf = BernoulliNB()
             param_dist = {
-                "estimator__fit_prior": [True]
+                "estimator__alpha": scipy.stats.uniform(),
+                "estimator__binarize": scipy.stats.uniform(),
+                "estimator__fit_prior": [True, False],
+            }
+        elif self.args.model == 'svm_linear':
+            clf = LinearSVC(class_weight='balanced', dual=False)
+            param_dist = {
+                "estimator__penalty": ['l1', 'l2'],
+                "estimator__loss": ['hinge', 'squared_hinge'],
+                "estimator__C": [0.1, 1, 10, 100, 1000]
             }
         else:
             raise ValueError("The model {} doesn't support parameter search in current stage".format(self.args.model))
 
-        clf = OneVsRestClassifier(clf, n_jobs=-1)
+        clf = OneVsRestClassifier(clf, n_jobs=1)
         kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
         # Notice that as we use clf.predict_proba in our cross-validation, we need to set needs_proba=True here
         scorer = make_scorer(anytype_f1_scorer, greater_is_better=True, needs_proba=True, id2label=self.id2label)
@@ -258,7 +256,7 @@ class Train(object):
                                            n_iter=n_iter,
                                            cv=kf,
                                            scoring=scorer,
-                                           verbose=1,
+                                           verbose=3,
                                            n_jobs=-1,
                                            )
         random_search.fit(self.data_x, self.data_y)
@@ -314,7 +312,7 @@ class Train(object):
 
     def _simple_cross_validate(self):
         """
-        Use a simple fixed NB model to debug the sklearn Random search and my random search
+        Use a simple fixed NB model to double check the correctness of sklearn Random search and my random search
         It can confirm our API compatible with late-fusion is correct
         :return:
         """

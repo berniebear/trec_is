@@ -48,7 +48,7 @@ def get_arguments():
                         help="Normalize each feature when reading them from file")
     # Model
     parser.add_argument("--model", type=str, default='bernoulli_nb',
-                        help="bernoulli_nb | rf | sgd_svm")
+                        help="bernoulli_nb | rf | sgd_svm | svm_linear")
     parser.add_argument("--no_class_weight", action='store_true',
                         help="Not use different weights for each class")
     parser.add_argument("--cv_num", type=int, default=5,
