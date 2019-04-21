@@ -251,7 +251,8 @@ class Train(object):
 
         clf = OneVsRestClassifier(clf, n_jobs=-1)
         kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
-        scorer = make_scorer(anytype_f1_scorer, greater_is_better=True, id2label=self.id2label)
+        # Notice that as we use clf.predict_proba in our cross-validation, we need to set needs_proba=True here
+        scorer = make_scorer(anytype_f1_scorer, greater_is_better=True, needs_proba=True, id2label=self.id2label)
         random_search = RandomizedSearchCV(clf,
                                            param_distributions=param_dist,
                                            n_iter=n_iter,
@@ -309,6 +310,34 @@ class Train(object):
         print_to_log("The Random search finished!")
         print_to_log("The best f1 is {}".format(best_f1))
         print_to_log("The best parameter is {}".format(best_param))
+        quit()
+
+    def _simple_cross_validate(self):
+        """
+        Use a simple fixed NB model to debug the sklearn Random search and my random search
+        It can confirm our API compatible with late-fusion is correct
+        :return:
+        """
+        kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
+        metric_values = {metric_name: [] for metric_name in self.metric_names}
+        clf = BernoulliNB(alpha=0.8490, binarize=0.3086, fit_prior=True)
+        clf = OneVsRestClassifier(clf, n_jobs=-1)
+        for train, test in kf.split(self.data_x, self.data_y):
+            X_train = self.data_x[train]
+            y_train = self.data_y[train]
+            X_test = self.data_x[test]
+            y_test = self.data_y[test]
+            clf.fit(X_train, y_train)
+            y_predict_score = clf.predict_proba(X_test)
+            y_predict = np.argmax(y_predict_score, axis=-1)
+            metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
+            for metric_name in self.metric_names:
+                metric_values[metric_name].append([metric_results[metric_name], len(y_test)])
+
+        metric_weighted_avg = self._get_weighted_avg(metric_values)
+        for metric_name in ['f1']:
+            print_to_log('The {0} score in cross validation is {1}'.format(metric_name, metric_values[metric_name]))
+            print_to_log('The average {0} score is {1}'.format(metric_name, metric_weighted_avg[metric_name]))
         quit()
 
     def _cross_validate(self):

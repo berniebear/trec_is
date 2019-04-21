@@ -226,18 +226,20 @@ Using `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-avg', 'fa
 
 Using `PCA=100` we get `0.6909` (after testing PCA=50, 100, 150, we find 100 performs best)
 
-After doing leave-one-out feature selection, I decide to keep those features: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`
+After doing leave-one-out feature selection, I decide to keep those features: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`.
 The current performance with bernoulli NB is `0.6768`, after adding `--pca` it achieves `0.6936`
+With `--pca` and `--event-wise` it can reach `0.8763`.
 
+After adding normalization, no matter with PCA or not, the performance drops a lot (without pca it is `0.6058`, with pca it is `0.6590`) So we may not use normalization.
 
+After adding `late_fusion` the performance drops (from `0.6936` to `0.6368`) So we may not use late fusion.
 
 
 
 ## Todo
-- Late fusion
+- Figure out the diff between sklearn Search and my own Search
 - Round-trip translation / paraphrase (SemEval 2015 Task 1) to do data augmentation
 - Multitask: use the hashtag as the label and try to predict it.
-- Read official fasttext ipython notebook to figure out why it performs so high (I guess it dues to parameter search)
 - First clasify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
 - Hand-crafted rule feature for each type
 - Add feature for each event (the type/title/narr tag in the event)
@@ -254,11 +256,12 @@ The current performance with bernoulli NB is `0.6768`, after adding `--pca` it a
 ### Apr18 Discussion
 
 Junpei:
+- [done] Try late fusion for current new parameters (not good)
+- [done] Normalization features before concatenate them
 - [done] Leave one out to select features (the `fasttext-tfidf` and `glove-avg` and `hashtag` are removed)
 - Add neural models
 
 Xinyu:
-
 - plug fasttext trained on Twitter data
 - Add other handcrafted feature, read CBNU paper (last year first prize) and adopt some hand-crafted features
 - Temporal information feature

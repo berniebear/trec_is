@@ -5,6 +5,7 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.externals import joblib
+from sklearn.preprocessing import normalize
 from nltk.tokenize import TweetTokenizer
 local_tokenizer = TweetTokenizer()
 
@@ -165,7 +166,10 @@ def extract_by_word_embed(texts: List[str], vectorizer, analyzer,
                 count_miss += 1
             embed_for_vocab.append(fasttext_vec)
         embed_for_vocab = np.asarray(embed_for_vocab)
-        feature = tfidf_feature.dot(embed_for_vocab)
+        tfidf_feature = normalize(tfidf_feature, norm='l1')
+        feature = tfidf_feature.dot(embed_for_vocab)  # [sent_num, vocab_size] * [vocab_size, embed_dim]
+        print("feature shape is {0}, embed_for_vocab shape is {1}, tfidf_feature shape is {2}".format(
+            feature.shape, embed_for_vocab.shape, tfidf_feature.shape))
         print("There are {0}/{1} words missed by the {2} in tfidf vocab".format(
             count_miss, tfidf_feature.shape[1], embed_name))
 
