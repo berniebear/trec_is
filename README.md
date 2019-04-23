@@ -235,13 +235,42 @@ After adding normalization, no matter with PCA or not, the performance drops a l
 After adding `late_fusion` the performance drops (from `0.6936` to `0.6368`) So we may not use late fusion.
 
 
+
 #### The following is all about Random Forest model
-`--pca` can reach `0.7832`.
+Use the feature selected according to NB: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`
+
+`--use_pca` can reach `0.7832`.
+
+`--use_pca` and random search parameter:
+```
+The best f1 is 0.784466505561625
+The best parameter is {'criterion': 'gini', 'max_depth': 64, 'max_features': 213, 'min_samples_leaf': 5, 'min_samples_split': 43, 'n_estimators': 128, 'class_weight': 'balanced', 'n_jobs': -1}
+```
+
+Without pca is running on Bernie server
+
+
+#### The following is all about linearSVC model
+Use the feature selected according to NB: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`
+
+`--use_pca`, the best f1 is `0.6934`. The best parameter is `{'C': 0.1, 'class_weight': 'balanced', 'dual': False, 'penalty': 'l2'}`
+
+`--normalize_feat` but without PCA, f1 reaches `0.7496`
+
+
+#### The following is all about xgboost model
+Use all default parameter with pca f1 is `0.7739`
+
+Parameter search with pca is running on GPU6
+
+#### Some other notes
+When we use the KFold of sklearn, we get the weighted average ratio around `3.95`.
+When we implement the stratified K-fold based on a paper published on 2011, the ratio is around `4.00`
+It means the stratified method is really better than K-folder, but the difference is not so obvious.
 
 ## Todo
 - Round-trip translation / paraphrase (SemEval 2015 Task 1) to do data augmentation
-- Multitask: use the hashtag as the label and try to predict it.
-- First clasify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
+- First classify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
 - Use a better method to predict the importance score
 - Use generative model, try to model the joint distribution of p(x,y) and can extract the feature to feed into the descriptive model (similar to ELMo)
 - Borrow idea from Twitter Sentiment Analysis (including pre-processing methods)
@@ -255,6 +284,7 @@ After adding `late_fusion` the performance drops (from `0.6936` to `0.6368`) So 
 ### Apr18 Discussion
 
 Junpei:
+- [done] Implement a stratified sampling method for multi-label setting.
 - [done] Transfer the Parameter Search to sklearn API
 - [done] Try late fusion for current new parameters (not good)
 - [done] Normalization features before concatenate them

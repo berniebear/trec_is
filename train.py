@@ -3,7 +3,7 @@ from scipy import stats
 import numpy as np
 import pandas as pd
 import scipy
-from sklearn.model_selection import KFold, StratifiedKFold, RandomizedSearchCV, ParameterSampler
+from sklearn.model_selection import KFold, RandomizedSearchCV, ParameterSampler, GridSearchCV, ParameterGrid
 from sklearn.linear_model import SGDClassifier
 from sklearn.svm import SVC, LinearSVC
 from sklearn.multiclass import OneVsRestClassifier
@@ -13,6 +13,7 @@ from sklearn.preprocessing import MultiLabelBinarizer, Normalizer, MinMaxScaler,
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import BernoulliNB, GaussianNB
 from sklearn.utils import shuffle
+from xgboost import XGBClassifier
 
 from utils import print_to_log, anytype_f1_scorer
 import utils
@@ -102,7 +103,7 @@ class Train(object):
     def train(self, small_x=None, small_y=None):
         self._shuffle_data()
         self._create_model()
-        self.data_y = MultiLabelBinarizer(classes=[i for i in range(len(self.id2label))]).fit_transform(self.data_y)
+        self.data_y = MultiLabelBinarizer(classes=list(range(len(self.id2label)))).fit_transform(self.data_y)
         if self.args.search_best_parameters:
             self._random_search_best_para(self.args.random_search_n_iter)
         if self.args.train_on_small:
@@ -113,7 +114,7 @@ class Train(object):
 
     def _train_on_small_predict_on_large(self, small_x, small_y):
         print("Train on the small and test on cross-validate test")
-        small_y = MultiLabelBinarizer(classes=[i for i in range(len(self.id2label))]).fit_transform(small_y)
+        small_y = MultiLabelBinarizer(classes=list(range(len(self.id2label)))).fit_transform(small_y)
         self._fit_data(small_x, small_y)
         kf = KFold(n_splits=self.args.cv_num)
         metric_names = ['accuracy', 'precision', 'recall', 'f1']
@@ -175,7 +176,9 @@ class Train(object):
         if model_name == 'sgd_svm':
             clf = SGDClassifier(max_iter=1000, tol=1e-3, loss='hinge', class_weight=class_weight)
         elif model_name == 'svm_linear':
-            clf = LinearSVC(class_weight=class_weight, dual=True)  # Feature dim is large, should use dual
+            if not param:
+                param = {'class_weight': class_weight, "C": 0.1, "dual": False, "penalty": "l2"}
+            clf = LinearSVC(**param)  # Set dual=False when training num >> feature num
         elif model_name == 'svm_rbf':
             clf = SVC(kernel='rbf', class_weight=class_weight, gamma='auto')
         elif model_name == 'svm_rbf_scale':
@@ -201,14 +204,16 @@ class Train(object):
                     'min_samples_split': 54,
                 }
             clf = RandomForestClassifier(**param)
+        elif model_name == 'xgboost':
+            clf = XGBClassifier()
         else:
             raise NotImplementedError
         return OneVsRestClassifier(clf, n_jobs=-1)
 
     def _random_search_best_para(self, n_iter):
-        self._random_search_by_sklearn(n_iter)
+        self._search_by_our_own(n_iter)
 
-    def _random_search_by_sklearn(self, n_iter):
+    def _search_by_sklearn(self, n_iter):
         """
         Use the RandomizedSearchCV API of sklearn, but need to customize the scoring function
         The advantage is that it parallelized well (However, according to the warning
@@ -241,7 +246,6 @@ class Train(object):
             clf = LinearSVC(class_weight='balanced', dual=False)
             param_dist = {
                 "estimator__penalty": ['l1', 'l2'],
-                "estimator__loss": ['hinge', 'squared_hinge'],
                 "estimator__C": [0.1, 1, 10, 100, 1000]
             }
         else:
@@ -251,22 +255,19 @@ class Train(object):
         kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
         # Notice that as we use clf.predict_proba in our cross-validation, we need to set needs_proba=True here
         scorer = make_scorer(anytype_f1_scorer, greater_is_better=True, needs_proba=True, id2label=self.id2label)
-        random_search = RandomizedSearchCV(clf,
-                                           param_distributions=param_dist,
-                                           n_iter=n_iter,
-                                           cv=kf,
-                                           scoring=scorer,
-                                           verbose=3,
-                                           n_jobs=-1,
-                                           )
-        random_search.fit(self.data_x, self.data_y)
+        if self.args.model == 'svm_linear':
+            search = GridSearchCV(clf, param_grid=param_dist, cv=kf, scoring=scorer, n_jobs=-1)
+        else:
+            search = RandomizedSearchCV(clf, param_distributions=param_dist, n_iter=n_iter, cv=kf, scoring=scorer, n_jobs=-1)
+
+        search.fit(self.data_x, self.data_y)
 
         print_to_log("Random Search finished!")
-        print_to_log("best_score_:\n{}".format(random_search.best_score_))
-        print_to_log("best_params_:\n{}".format(random_search.best_params_))
+        print_to_log("best_score_:\n{}".format(search.best_score_))
+        print_to_log("best_params_:\n{}".format(search.best_params_))
         quit()
 
-    def _random_search_by_our_own(self, n_iter):
+    def _search_by_our_own(self, n_iter):
         """
         Call our own class method to perform the random search
         The drawback is that they cannot be performed paralleled
@@ -287,10 +288,30 @@ class Train(object):
                 "binarize": scipy.stats.uniform(),
                 "fit_prior": [True, False],
             }
+        elif self.args.model == 'svm_linear':
+            param_dist = {
+                "penalty": ['l1', 'l2'],
+                "C": [0.1, 1, 10, 100, 1000],
+                "class_weight": ['balanced'],
+                "dual": [False],
+            }
+        elif self.args.model == 'xgboost':
+            param_dist = {
+                "max_depth": [3, 4, 5, 6, 7, 8, 9, 10],
+                "learning_rate": [0.01, 0.03, 0.05, 0.07, 0.1],
+                "n_estimators": [100, 300, 500],
+                "subsample": [0.8, 0.9, 1.0],
+                "colsample_bytree": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                "gamma": [0, 1, 5]
+            }
         else:
             raise ValueError("The model {} doesn't support parameter search in current stage".format(self.args.model))
 
-        param_list = list(ParameterSampler(param_dist, n_iter=n_iter))
+        if self.args.model == 'svm_linear':
+            param_list = list(ParameterGrid(param_dist))
+        else:
+            param_list = list(ParameterSampler(param_dist, n_iter=n_iter))
+
         best_f1 = 0.0
         best_param = dict()
         for i, param in enumerate(param_list):
@@ -338,20 +359,75 @@ class Train(object):
             print_to_log('The average {0} score is {1}'.format(metric_name, metric_weighted_avg[metric_name]))
         quit()
 
+    def _get_k_fold_index_list(self):
+        """
+        We can simply use the KFold API provided by sklearn, or use the stratified split designed for multi-label
+        To make it consistent with the sklearn API, we do some post-processing
+        :return:
+        """
+        if self.args.use_stratify_split:
+            stratified_data_ids, _ = utils.stratify_split(self.data_y, list(range(len(self.id2label))),
+                                                          [1 / self.args.cv_num] * self.args.cv_num, one_hot=True)
+            index_list = []
+            for i in range(self.args.cv_num):
+                test_idx = stratified_data_ids[i]
+                train_idx = []
+                for ii in range(self.args.cv_num):
+                    if ii == i:
+                        continue
+                    train_idx += stratified_data_ids[ii]
+                index_list.append((train_idx, test_idx))
+
+        else:
+            # StratifiedKFold doesn't support multi-label setting, so we can only use KFold
+            kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
+            index_list = kf.split(self.data_x, self.data_y)
+
+        return index_list
+
+    def _get_label_count(self, y_data: np.ndarray):
+        y_count = {i: 0 for i in range(len(self.id2label))}
+        for i in range(y_data.shape[0]):
+            for j in range(y_data.shape[1]):
+                if y_data[i, j] == 1:
+                    y_count[j] += 1
+        return y_count
+
+    def _get_ratio_for_each_class(self, y_train: np.ndarray, y_test: np.ndarray):
+        """
+        This method is used to compare different k-fold stratified sampling method. For example, if you use 5-fold,
+            the method would be better if its ratio is closer to 4.0
+        You can call this function in `_cross_validate` method
+        :param y_train:
+        :param y_test:
+        :return:
+        """
+        y_train_count = self._get_label_count(y_train)
+        y_test_count = self._get_label_count(y_test)
+        count_ratio = {i: y_train_count[i]/y_test_count[i] if y_test_count[i] != 0 else 0 for i in range(len(self.id2label))}
+        sum_val = 0
+        sum_count = 0
+        for i in range(len(self.id2label)):
+            current_count = y_train_count[i] + y_test_count[i]
+            sum_val += count_ratio[i] * current_count
+            sum_count += current_count
+        print("The ratio for each class is {}".format(count_ratio))
+        print("The weighted average ratio is {}".format(sum_val / sum_count))
+
     def _cross_validate(self):
         """
         Don't worry about stratified K-fold, because for cross_validate,
             if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used
         If we are performing event-wise training, we need to return the metrics for each running (event)
-        Todo: If you want to get more balanced k-fold split, you can refer to `proba_mass_split` in utils.py
+        Note: If you want to get more balanced k-fold split, you can refer to `proba_mass_split` in utils.py,
+            or the `stratify_split` in utils.py which is implemented based on Sechidis et. al paper
         :return:
         """
         print_to_log('Use {} fold cross validation'.format(self.args.cv_num))
-        # As StratifiedKFold doesn't support multi-label setting
-        kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
         metric_values = {metric_name: [] for metric_name in self.metric_names}
 
-        for train, test in kf.split(self.data_x, self.data_y):
+        index_list = self._get_k_fold_index_list()
+        for train, test in index_list:
             X_train = self.data_x[train]
             y_train = self.data_y[train]
             X_test = self.data_x[test]

@@ -24,6 +24,8 @@ def get_arguments():
                         help="Number of iterations to do random search (each iteration train a set of parameters)")
     parser.add_argument("--search_print_interval", type=int, default=20,
                         help="As random forest has much longer training time, suggested value is 3, and nb can use 20")
+    parser.add_argument("--use_stratify_split", action="store_true",
+                        help="Use stratify split for multi-label setting implemented based on a 2011 paper")
     # Data path
     parser.add_argument("--out_dir", type=str, default='out',
                         help="Directory contains the output things, including the log and ckpt")
