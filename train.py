@@ -198,14 +198,20 @@ class Train(object):
                     "n_jobs": -1,
                     'class_weight': class_weight,
                     'criterion': 'gini',
-                    'max_depth': 32,
-                    'max_features': 113,
-                    'min_samples_leaf': 2,
-                    'min_samples_split': 54,
+                    'max_depth': 64,
+                    'max_features': 213,
+                    'min_samples_leaf': 5,
+                    'min_samples_split': 43,
                 }
             clf = RandomForestClassifier(**param)
         elif model_name == 'xgboost':
-            clf = XGBClassifier()
+            if not param:
+                param = {
+                    'max_depth': 3,
+                    'n_estimators': 100,
+                    "n_jobs": -1,
+                }
+            clf = XGBClassifier(**param)
         else:
             raise NotImplementedError
         return OneVsRestClassifier(clf, n_jobs=-1)
@@ -281,6 +287,9 @@ class Train(object):
                 "min_samples_split": scipy.stats.randint(2, 512),
                 "min_samples_leaf": scipy.stats.randint(2, 512),
                 "criterion": ["gini", "entropy"],
+                "n_estimators": [128],
+                "class_weight": ["balanced"],
+                "n_jobs": [-1],
             }
         elif self.args.model == 'bernoulli_nb':
             param_dist = {
@@ -302,7 +311,8 @@ class Train(object):
                 "n_estimators": [100, 300, 500],
                 "subsample": [0.8, 0.9, 1.0],
                 "colsample_bytree": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-                "gamma": [0, 1, 5]
+                "gamma": [0, 1, 5],
+                "n_jobs": [-1],
             }
         else:
             raise ValueError("The model {} doesn't support parameter search in current stage".format(self.args.model))
@@ -315,8 +325,7 @@ class Train(object):
         best_f1 = 0.0
         best_param = dict()
         for i, param in enumerate(param_list):
-            if self.args.model == 'rf':  # Some fix parameters of random forest
-                param.update({'n_estimators': 128, 'class_weight': "balanced", 'n_jobs': -1})
+            print_to_log("Using the parameter set: {}".format(param))
             self._create_model(param)
             current_f1 = self._cross_validate()
             if current_f1 > best_f1:
