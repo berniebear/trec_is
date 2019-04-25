@@ -126,11 +126,35 @@ class Preprocess(object):
         """
         Notice that here the test file should be the formalized file, as the format of training data
             but the label could be some fake labels (because we don't have label for 2019-test data)
+        Another thing worth to mention is we don't check if the tweet is in self.tweetid2feature, because
+            we assume all tweets provided as 2019-test data should have its content also provided
         :param test_file:
         :return:
         """
-        data_x, data_y = self._extract_data_from_formalized_file(test_file)
-        return data_x
+        if self.args.event_wise:
+            data_x = {event_type: [] for event_type in utils.idx2event_type}
+            event2idx_list = {event_type: [] for event_type in utils.idx2event_type}
+        else:
+            data_x = []
+
+        with open(test_file, 'r', encoding='utf8') as f:
+            for idx, line in enumerate(f):
+                line = line.strip().split('\t')
+                tweetid = line[0]
+                event_type = line[3]
+                feature = self.tweetid2feature[tweetid]
+                if self.args.event_wise:
+                    data_x[event_type].append(feature)
+                    event2idx_list[event_type].append(idx)
+                else:
+                    data_x.append(feature)
+
+        if self.args.event_wise:
+            for event_type in utils.idx2event_type:
+                data_x[event_type] = np.asarray(data_x[event_type])
+            return data_x, event2idx_list, idx + 1
+        else:
+            return np.asarray(data_x)
 
     def _extract_data_from_formalized_file_single_label(self, filename: str):
         """

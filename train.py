@@ -522,6 +522,7 @@ class Train(object):
     def predict_on_test(self, test_data: np.ndarray):
         """
         For ensemble purpose, each model predict on test data
+        Notice that for the event-wise model, we need to merge all predictions into a list to keep the original order
         :param test_data:
         :return:
         """
@@ -533,6 +534,9 @@ class Train(object):
             predict_score = self.clf[0].decision_function(test_data)
         else:
             predict_score = self.clf[0].predict_proba(test_data)
+
+        if self.args.event_wise:
+            return predict_score
 
         with open(test_predict_file, 'w', encoding='utf8') as f:
             for row in predict_score:

@@ -82,17 +82,26 @@ def main():
     if args.predict_mode:
         # Step3. Get the 2019 test data, and retrain the model on all training data, then predict on the 2019-test
         # Todo: Generate the formalized file after 2019-test data released
+        # Todo: After 2019-test data released, add it to tweet_file_list to make sure those tweets have features
         # Todo: Convert label to the new long-label for 2019 setting
         formal_2019_test_file = os.path.join(args.data_dir, '2019-test.txt')
-        test_x = preprocess.extract_formalized_test_data(formal_2019_test_file)
         if args.event_wise:
-            # Todo: How to merge predictions of all event types by original order?
+            test_x, event2idx_list, line_num = preprocess.extract_formalized_test_data(formal_2019_test_file)
+            test_predict_collect = [0] * line_num
             for event_type in utils.idx2event_type:
                 it_data_x, it_data_y, it_test_x = data_x[event_type], data_y[event_type], test_x[event_type]
                 train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len, event_type)
                 train.train_on_all()
-                train.predict_on_test(it_test_x)
+                predict_score = train.predict_on_test(it_test_x)
+                for i, idx in event2idx_list[event_type]:
+                    test_predict_collect[idx] = predict_score[i]
+            test_predict_file = os.path.join(args.ensemble_dir, 'test_predict_{0}.txt'.format(args.model))
+            with open(test_predict_file, 'w', encoding="utf8") as f:
+                for row in test_predict_collect:
+                    f.write('{}\n'.format(' '.join(list(map(str, row)))))
+            print("The test predict has been written to {0}".format(test_predict_file))
         else:
+            test_x = preprocess.extract_formalized_test_data(formal_2019_test_file)
             train = Train(args, data_x, data_y, id2label, preprocess.feature_len)
             train.train_on_all()
             train.predict_on_test(test_x)
