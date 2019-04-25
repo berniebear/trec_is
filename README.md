@@ -238,35 +238,30 @@ After adding `late_fusion` the performance drops (from `0.6936` to `0.6368`) So 
 
 #### The following is all about Random Forest model
 Use the feature selected according to NB: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`
-
-`--use_pca` can reach `0.7832`.
-Without pca the f1 is `0.7775`, which also takes much longer time, so we had better use pca.
-
-`--use_pca` and random search parameter:
-```
-The best f1 is 0.784466505561625
-The best parameter is {'criterion': 'gini', 'max_depth': 64, 'max_features': 213, 'min_samples_leaf': 5, 'min_samples_split': 43, 'n_estimators': 128, 'class_weight': 'balanced', 'n_jobs': -1}
-```
-
+- `--use_pca` can reach `0.7832`.
+- Without pca the f1 is `0.7775`, which also takes much longer time, so we had better use pca.
+- `--use_pca` and random search parameter:
+    ```
+    The best f1 is 0.784466505561625
+    The best parameter is {'criterion': 'gini', 'max_depth': 64, 'max_features': 213, 'min_samples_leaf': 5, 'min_samples_split': 43, 'n_estimators': 128, 'class_weight': 'balanced', 'n_jobs': -1}
+    ```
 
 
 #### The following is all about linearSVC model
 Use the feature selected according to NB: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`
-
-`--use_pca`, the best f1 is `0.6934`. The best parameter is `{'C': 0.1, 'class_weight': 'balanced', 'dual': False, 'penalty': 'l2'}`
-
-`--normalize_feat` but without PCA, f1 reaches `0.7496`
+- `--use_pca`, the best f1 is `0.6934`. The best parameter is `{'C': 0.1, 'class_weight': 'balanced', 'dual': False, 'penalty': 'l2'}`
+- `--normalize_feat` but without PCA, f1 reaches `0.7496`
+- For `svm_rbf` with pca, f1 is `0.7085`, without PCA it will raise Memory error, and running time will be too long.
 
 
 #### The following is all about xgboost model
-Use all default parameter with pca f1 is `0.7739`
-
-Parameter search with pca is running on GPU6
+- Use all default parameter with pca f1 is `0.7739`
+- Parameter search with pca is running on GPU6 (current best is `0.8063`)
 
 
 #### Some other notes
 When we use the KFold of sklearn, we get the weighted average ratio around `3.95`.
-When we implement the stratified K-fold based on a paper published on 2011, the ratio is around `4.00`
+When we implement the stratified K-fold based on a paper published on 2011, the ratio is around `4.00`.
 It means the stratified method is really better than K-folder, but the difference is not so obvious.
 
 
@@ -292,6 +287,8 @@ Junpei:
 - [done] Try late fusion for current new parameters (not good)
 - [done] Normalization features before concatenate them
 - [done] Leave one out to select features (the `fasttext-tfidf` and `glove-avg` and `hashtag` are removed)
+- [done] Add models of linear svm and XGBoost
+- Do model ensemble (Using Probabilities as Meta-Features)
 - Add neural models
 
 Xinyu:

@@ -82,6 +82,8 @@ def prepare_folders(args):
         os.mkdir(args.log_dir)
     if not os.path.isdir(args.model_dir):
         os.mkdir(args.model_dir)
+    if not os.path.isdir(args.ensemble_dir):
+        os.mkdir(args.ensemble_dir)
 
 
 def check_args_conflict(args):
@@ -91,9 +93,14 @@ def check_args_conflict(args):
     :return:
     """
     assert args.cross_validate is True, "Current code focus on cross validation on 2018-train + 2018-test"
+    assert args.train_on_small is False, "This function is deprecated"
     if args.event_wise or args.train_on_small:
         assert args.cross_validate is True
     if args.event_wise:
+        assert args.train_on_small is False
+    if args.predict_mode:
+        assert args.late_fusion is False, "Currently our predict model only supports early-fusion"
+        assert args.search_best_parameters is False
         assert args.train_on_small is False
 
 

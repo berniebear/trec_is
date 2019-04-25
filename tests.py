@@ -1,3 +1,6 @@
+import random
+import numpy as np
+
 from sklearn.preprocessing import MultiLabelBinarizer
 
 from utils import stratify_split
@@ -35,4 +38,7 @@ def test_stratify_split():
 
 
 if __name__ == '__main__':
+    random_seed = 9
+    random.seed(random_seed)
+    np.random.seed(random_seed)
     test_stratify_split()

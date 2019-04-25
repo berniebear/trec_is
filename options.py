@@ -26,6 +26,8 @@ def get_arguments():
                         help="As random forest has much longer training time, suggested value is 3, and nb can use 20")
     parser.add_argument("--use_stratify_split", action="store_true",
                         help="Use stratify split for multi-label setting implemented based on a 2011 paper")
+    parser.add_argument("--predict_mode", action="store_true",
+                        help="In this mode, write the dev_predict, dev_label, test_predict to file, for later ensemble")
     # Data path
     parser.add_argument("--out_dir", type=str, default='out',
                         help="Directory contains the output things, including the log and ckpt")

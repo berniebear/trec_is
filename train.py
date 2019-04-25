@@ -1,3 +1,4 @@
+import os
 from typing import List, Dict
 from scipy import stats
 import numpy as np
@@ -9,7 +10,7 @@ from sklearn.svm import SVC, LinearSVC
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.metrics import f1_score, make_scorer
 from sklearn.metrics.pairwise import chi2_kernel
-from sklearn.preprocessing import MultiLabelBinarizer, Normalizer, MinMaxScaler, StandardScaler
+from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import BernoulliNB, GaussianNB
 from sklearn.utils import shuffle
@@ -20,7 +21,8 @@ import utils
 
 
 class Train(object):
-    def __init__(self, args, data_x: np.ndarray, data_y: np.ndarray, id2label: list, feature_lens: List[int]):
+    def __init__(self, args, data_x: np.ndarray, data_y: np.ndarray, id2label: list, feature_lens: List[int],
+                 event_type: str=None):
         """
         We use the feature_lens to make the API consistent with or without late fusion.
         If we use late fusion, the feature_lens will contain real lens of different features.
@@ -32,6 +34,7 @@ class Train(object):
         :param id2label:
         :param feature_lens: Contains lens of features, such as [1024, 256] means the first feature is 1024 dim and the
                 second feature is 256 dim
+        :param event_type: used to specify the event for event-wise model
         """
         self.args = args
         self.data_x = data_x
@@ -40,6 +43,16 @@ class Train(object):
         self.feature_lens = feature_lens
         self.metric_names = ['accuracy', 'precision', 'recall', 'f1']
         self.clf: List[OneVsRestClassifier] = None
+        self.event_type = event_type
+
+    def train_on_all(self):
+        """
+        A wrapper for train on all data, which is used to prepare for the prediction on test data
+        Notice that here we don't use cross-validation, because cv is only used for parameter-choosing
+        Now we have determined the parameter, and we want to train on all data we have (self.data_x and self.data_y)
+        :return:
+        """
+        self._fit_data(self.data_x, self.data_y)
 
     def _fit_data(self, data_x, data_y):
         start_idx = 0
@@ -51,6 +64,9 @@ class Train(object):
     def _predict_data(self, data_x):
         """
         Currently support avg score or voting
+        Notice that this is a uniform API for both with or without late fusion.
+            For late fusion it will use avg or voting
+            For not late fusion it will have the same effect as the single model prediction
         :param data_x:
         :return:
         """
@@ -100,36 +116,18 @@ class Train(object):
                     vote_res[i] = predict
         return np.asarray(vote_res)
 
-    def train(self, small_x=None, small_y=None):
-        self._shuffle_data()
+    def _binarize_data_y(self):
+        self.mlb = MultiLabelBinarizer(classes=list(range(len(self.id2label))))
+        self.data_y = self.mlb.fit_transform(self.data_y)
+
+    def train(self):
         self._create_model()
-        self.data_y = MultiLabelBinarizer(classes=list(range(len(self.id2label)))).fit_transform(self.data_y)
+        self._binarize_data_y()
         if self.args.search_best_parameters:
             self._random_search_best_para(self.args.random_search_n_iter)
-        if self.args.train_on_small:
-            self._train_on_small_predict_on_large(small_x, small_y)
         if self.args.cross_validate:
             return self._cross_validate()
         self._fit_data(self.data_x, self.data_y)
-
-    def _train_on_small_predict_on_large(self, small_x, small_y):
-        print("Train on the small and test on cross-validate test")
-        small_y = MultiLabelBinarizer(classes=list(range(len(self.id2label)))).fit_transform(small_y)
-        self._fit_data(small_x, small_y)
-        kf = KFold(n_splits=self.args.cv_num)
-        metric_names = ['accuracy', 'precision', 'recall', 'f1']
-        metric_values = {metric_name: [] for metric_name in metric_names}
-        for train, test in kf.split(self.data_x, self.data_y):
-            X_test = self.data_x[test]
-            y_test = self.data_y[test]
-            y_predict = self._predict_data(X_test)
-            metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
-            for metric_name in metric_names:
-                metric_values[metric_name].append(metric_results[metric_name])
-        for metric_name in metric_names:
-            print('The {0} score in cross validation is {1}'.format(metric_name, metric_values[metric_name]))
-            print('The average {0} score is {1}'.format(metric_name, np.mean(metric_values[metric_name])))
-        quit()
 
     def predict(self, data_x: np.ndarray, tweetid_list: list, tweetid2idx: list, tweetid2incident: dict,
                 id2label: list, short2long_label: dict, majority_label: str, out_file: str):
@@ -163,7 +161,7 @@ class Train(object):
         print_to_log("The count of different labels in prediction results:\n{}".format(df.groupby("label").count()))
         print_to_log("The prediction file has been written to {}".format(out_file))
 
-    def _shuffle_data(self):
+    def shuffle_data(self):
         self.data_x, self.data_y = shuffle(self.data_x, self.data_y)
 
     def _create_model(self, param=None):
@@ -350,11 +348,11 @@ class Train(object):
         metric_values = {metric_name: [] for metric_name in self.metric_names}
         clf = BernoulliNB(alpha=0.8490, binarize=0.3086, fit_prior=True)
         clf = OneVsRestClassifier(clf, n_jobs=-1)
-        for train, test in kf.split(self.data_x, self.data_y):
-            X_train = self.data_x[train]
-            y_train = self.data_y[train]
-            X_test = self.data_x[test]
-            y_test = self.data_y[test]
+        for train_idx_list, test_idx_list in kf.split(self.data_x, self.data_y):
+            X_train = self.data_x[train_idx_list]
+            y_train = self.data_y[train_idx_list]
+            X_test = self.data_x[test_idx_list]
+            y_test = self.data_y[test_idx_list]
             clf.fit(X_train, y_train)
             y_predict_score = clf.predict_proba(X_test)
             y_predict = np.argmax(y_predict_score, axis=-1)
@@ -434,18 +432,30 @@ class Train(object):
         """
         print_to_log('Use {} fold cross validation'.format(self.args.cv_num))
         metric_values = {metric_name: [] for metric_name in self.metric_names}
+        dev_predict = np.zeros_like(self.data_y, dtype=np.float)
 
         index_list = self._get_k_fold_index_list()
-        for train, test in index_list:
-            X_train = self.data_x[train]
-            y_train = self.data_y[train]
-            X_test = self.data_x[test]
-            y_test = self.data_y[test]
+        for train_idx_list, test_idx_list in index_list:
+            X_train = self.data_x[train_idx_list]
+            y_train = self.data_y[train_idx_list]
+            X_test = self.data_x[test_idx_list]
+            y_test = self.data_y[test_idx_list]
             self._fit_data(X_train, y_train)
             y_predict = self._predict_data(X_test)
             metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
             for metric_name in self.metric_names:
                 metric_values[metric_name].append([metric_results[metric_name], len(y_test)])
+
+            if self.args.predict_mode:
+                if 'svm' in self.args.model:
+                    predict_score = self.clf[0].decision_function(X_test)
+                else:
+                    predict_score = self.clf[0].predict_proba(X_test)
+                dev_predict[test_idx_list] = predict_score
+
+        if self.args.predict_mode:
+            custom_postfix = '_{}'.format(self.event_type) if self.args.event_wise else ''
+            self._write_predict_and_label(self.mlb.inverse_transform(self.data_y), dev_predict, custom_postfix)
 
         metric_weighted_avg = self._get_weighted_avg(metric_values)
         for metric_name in self.metric_names:
@@ -456,8 +466,6 @@ class Train(object):
             return {metric_name: metric_weighted_avg[metric_name] for metric_name in self.metric_names}
         elif self.args.search_best_parameters:
             return metric_weighted_avg['f1']
-        else:
-            quit()
 
     def _get_weighted_avg(self, metric_values):
         metric_accumulate = {metric_name: 0.0 for metric_name in self.metric_names}
@@ -469,3 +477,65 @@ class Train(object):
         for metric_name in self.metric_names:
             metric_accumulate[metric_name] /= count[metric_name]
         return metric_accumulate
+
+    def _write_predict_and_label(self, dev_label: List[set], dev_predict: np.ndarray, custom_postfix: str):
+        """
+        For each call of this function, we will write the dev labels (multiple labels per line)
+            and dev predict (the probability score per line) to the file.
+        Notice that in most situation the random seed could guarantee the order of labels for each run is consistent,
+            but just in case some weird situations, I check the order each time if the dev label file already exists
+        :param dev_label:
+        :param dev_predict:
+        :param custom_postfix: Used for some situations we want to add postfix to distinguish different settings for
+                                the same model
+        :return:
+        """
+        dev_label_file = os.path.join(self.args.ensemble_dir, 'dev_label{0}.txt'.format(custom_postfix))
+        dev_predict_file = os.path.join(self.args.ensemble_dir, 'dev_predict_{0}{1}.txt'.format(
+            self.args.model, custom_postfix))
+
+        if os.path.isfile(dev_label_file):
+            # If the file already exists, use first n rows to make sure the label order is consistent
+            nums_to_check = 20
+            check_list = []
+            with open(dev_label_file, 'r', encoding='utf8') as f:
+                for i, line in enumerate(f):
+                    if i >= nums_to_check:
+                        break
+                    check_list.append(list(map(int, line.strip().split())))
+            for i, it_check in enumerate(check_list):
+                current_label = dev_label[i]
+                assert set(it_check) == set(current_label), "Fatal Error! The order is inconsistent for {}!".format(dev_label)
+        else:
+            with open(dev_label_file, 'w', encoding='utf8') as f:
+                for label in dev_label:
+                    label_list = sorted(list(map(str, label)))
+                    f.write('{}\n'.format(' '.join(label_list)))
+
+        with open(dev_predict_file, 'w', encoding='utf8') as f:
+            for row in dev_predict:
+                f.write('{}\n'.format(' '.join(list(map(str, row)))))
+
+        print("The dev labels has been written to {0} and predict has been written to {1}".format(
+            dev_label_file, dev_predict_file))
+
+    def predict_on_test(self, test_data: np.ndarray):
+        """
+        For ensemble purpose, each model predict on test data
+        :param test_data:
+        :return:
+        """
+        custom_postfix = '_{}'.format(self.event_type) if self.args.event_wise else ''
+        test_predict_file = os.path.join(self.args.ensemble_dir, 'test_predict_{0}{1}.txt'.format(
+            self.args.model, custom_postfix))
+
+        if 'svm' in self.args.model:
+            predict_score = self.clf[0].decision_function(test_data)
+        else:
+            predict_score = self.clf[0].predict_proba(test_data)
+
+        with open(test_predict_file, 'w', encoding='utf8') as f:
+            for row in predict_score:
+                f.write('{}\n'.format(' '.join(list(map(str, row)))))
+
+        print("The test predict has been written to {0}".format(test_predict_file))

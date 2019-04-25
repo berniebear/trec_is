@@ -74,16 +74,6 @@ class Preprocess(object):
     def extract_train_data(self, train_file):
         return self._extract_data_from_formalized_file(train_file)
 
-    def extract_test_data_with_labels(self, test_file):
-        """
-        Note: This function is deprecated, which is used to extract the test data with labels.
-        However, currently we direct merge train and test files in cross-validation mode, so we only need to extract
-            data and labels from one file (the '2018-all.txt').
-        :param test_file:
-        :return:
-        """
-        return self._extract_data_from_formalized_file(test_file)
-
     def _extract_data_from_formalized_file(self, filename: str):
         """
         Extract data in the form of multi-label, where we treat each "tweet" as a training instance, and the label is
@@ -132,9 +122,19 @@ class Preprocess(object):
 
         return data_x, data_y
 
+    def extract_formalized_test_data(self, test_file: str):
+        """
+        Notice that here the test file should be the formalized file, as the format of training data
+            but the label could be some fake labels (because we don't have label for 2019-test data)
+        :param test_file:
+        :return:
+        """
+        data_x, data_y = self._extract_data_from_formalized_file(test_file)
+        return data_x
+
     def _extract_data_from_formalized_file_single_label(self, filename: str):
         """
-        Note: This function has been deprecated, because now we focus on multi-label model, and to make it consistent
+        Note: This function is deprecated, because now we focus on multi-label model, and to make it consistent
             with the official evaluation file, we need our ground truth label in the form of multi-label
         Notice that each tweet may have several labels, and we use each of them to construct a training instance
         :param filename: The filename of formalized file, where each line is "{tweetid}\t{labels}\t{priority}}"
@@ -164,8 +164,19 @@ class Preprocess(object):
         print("The shape of data_x is {0}, shape of data_y is {1}".format(data_x.shape, data_y.shape))
         return data_x, data_y
 
+    def extract_test_data_with_labels(self, test_file):
+        """
+        Note: This function is deprecated, which is used to extract the test data with labels.
+        However, currently we direct merge train and test files in cross-validation mode, so we only need to extract
+            data and labels from one file (the '2018-all.txt').
+        :param test_file:
+        :return:
+        """
+        return self._extract_data_from_formalized_file(test_file)
+
     def extract_test_data(self, test_file: str):
         """
+        Note: This function is deprecated, which is used for the old setting (train on 2018-train and test on 2018-test)
         This function extracts only X data for testing (assume labels are invisible for us)
         It also returns many other auxiliary things which are useful during prediction
         :param test_file:

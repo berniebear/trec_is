@@ -20,6 +20,7 @@ def main():
     # Create folders and set logging format
     args.model_dir = os.path.join(args.out_dir, 'ckpt')
     args.log_dir = os.path.join(args.out_dir, 'log')
+    args.ensemble_dir = os.path.join(args.out_dir, 'ensemble')
     prepare_folders(args)
     logger = set_logging(args)
     logger.info("Here is the arguments of this running:")
@@ -66,7 +67,8 @@ def main():
         metric_names = None
         for event_type in utils.idx2event_type:
             it_data_x, it_data_y = data_x[event_type], data_y[event_type]
-            train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len)
+            train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len, event_type)
+            train.shuffle_data()
             metrics = train.train()
             metrics_collect.append((metrics, it_data_x.shape[0]))
             if metric_names is None:
@@ -74,18 +76,34 @@ def main():
         utils.get_final_metrics(metrics_collect, metric_names)
     else:
         train = Train(args, data_x, data_y, id2label, preprocess.feature_len)
-        if args.train_on_small:
-            small_x, small_y = preprocess.extract_train_data(os.path.join(args.data_dir, '2018-train.txt'))
-            train.train(small_x, small_y)
+        train.shuffle_data()
         train.train()
 
-        # Step3. Predict if needed (don't need for cross-validation)
-        predict_file = os.path.join(args.out_dir, "predict.txt")
-        test_data_x, test_tweetid_list, tweetid2idx, tweetid2incident = preprocess.extract_test_data(test_file)
-        train.predict(test_data_x, test_tweetid_list, tweetid2idx, tweetid2incident,
-                      id2label, short2long_label, majority_label, predict_file)
-        utils.gzip_compress_file(predict_file)
-        evaluate(test_label_file_list, predict_file + ".gz", label_file, args.out_dir)
+    if args.predict_mode:
+        # Step3. Get the 2019 test data, and retrain the model on all training data, then predict on the 2019-test
+        # Todo: Generate the formalized file after 2019-test data released
+        # Todo: Convert label to the new long-label for 2019 setting
+        formal_2019_test_file = os.path.join(args.data_dir, '2019-test.txt')
+        test_x = preprocess.extract_formalized_test_data(formal_2019_test_file)
+        if args.event_wise:
+            # Todo: How to merge predictions of all event types by original order?
+            for event_type in utils.idx2event_type:
+                it_data_x, it_data_y, it_test_x = data_x[event_type], data_y[event_type], test_x[event_type]
+                train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len, event_type)
+                train.train_on_all()
+                train.predict_on_test(it_test_x)
+        else:
+            train = Train(args, data_x, data_y, id2label, preprocess.feature_len)
+            train.train_on_all()
+            train.predict_on_test(test_x)
+
+    # The old predict script for evaluation on 2018-test data
+    # predict_file = os.path.join(args.out_dir, "predict.txt")
+    # test_data_x, test_tweetid_list, tweetid2idx, tweetid2incident = preprocess.extract_test_data(test_file)
+    # train.predict(test_data_x, test_tweetid_list, tweetid2idx, tweetid2incident,
+    #               id2label, short2long_label, majority_label, predict_file)
+    # utils.gzip_compress_file(predict_file)
+    # evaluate(test_label_file_list, predict_file + ".gz", label_file, args.out_dir)
 
 
 if __name__ == '__main__':
