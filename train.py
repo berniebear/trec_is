@@ -52,6 +52,8 @@ class Train(object):
         Now we have determined the parameter, and we want to train on all data we have (self.data_x and self.data_y)
         :return:
         """
+        self._create_model()
+        self._binarize_data_y()
         self._fit_data(self.data_x, self.data_y)
 
     def _fit_data(self, data_x, data_y):
@@ -215,7 +217,10 @@ class Train(object):
         return OneVsRestClassifier(clf, n_jobs=-1)
 
     def _random_search_best_para(self, n_iter):
-        self._search_by_our_own(n_iter)
+        if self.args.search_by_sklearn_api:
+            self._search_by_sklearn(n_iter)
+        else:
+            self._search_by_our_own(n_iter)
 
     def _search_by_sklearn(self, n_iter):
         """
@@ -247,22 +252,37 @@ class Train(object):
                 "estimator__fit_prior": [True, False],
             }
         elif self.args.model == 'svm_linear':
-            clf = LinearSVC(class_weight='balanced', dual=False)
+            clf = LinearSVC()
             param_dist = {
-                "estimator__penalty": ['l1', 'l2'],
-                "estimator__C": [0.1, 1, 10, 100, 1000]
+                "penalty": ['l1', 'l2'],
+                "C": [0.1, 1, 10, 100, 1000],
+                "class_weight": ['balanced'],
+                "dual": [False],
+            }
+        elif self.args.model == 'xgboost':
+            clf = XGBClassifier()
+            param_dist = {
+                "max_depth": [3, 4, 5, 6, 7, 8, 9, 10],
+                "learning_rate": [0.01, 0.03, 0.05, 0.07, 0.1],
+                "n_estimators": [100, 300, 500],
+                "subsample": [0.8, 0.9, 1.0],
+                "colsample_bytree": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                "gamma": [0, 1, 5],
+                "n_jobs": [-1],
             }
         else:
             raise ValueError("The model {} doesn't support parameter search in current stage".format(self.args.model))
 
+        param_dist = {"estimator__{}".format(k): v for k, v in param_dist.items()}
         clf = OneVsRestClassifier(clf, n_jobs=1)
         kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
         # Notice that as we use clf.predict_proba in our cross-validation, we need to set needs_proba=True here
         scorer = make_scorer(anytype_f1_scorer, greater_is_better=True, needs_proba=True, id2label=self.id2label)
         if self.args.model == 'svm_linear':
-            search = GridSearchCV(clf, param_grid=param_dist, cv=kf, scoring=scorer, n_jobs=-1)
+            search = GridSearchCV(clf, param_grid=param_dist, cv=kf, scoring=scorer, n_jobs=-1, verbose=10)
         else:
-            search = RandomizedSearchCV(clf, param_distributions=param_dist, n_iter=n_iter, cv=kf, scoring=scorer, n_jobs=-1)
+            search = RandomizedSearchCV(clf, param_distributions=param_dist, n_iter=n_iter, cv=kf,
+                                        scoring=scorer, n_jobs=-1, verbose=10)
 
         search.fit(self.data_x, self.data_y)
 
@@ -323,6 +343,8 @@ class Train(object):
         best_f1 = 0.0
         best_param = dict()
         for i, param in enumerate(param_list):
+            if i < self.args.search_skip:
+                continue
             print_to_log("Using the parameter set: {}".format(param))
             self._create_model(param)
             current_f1 = self._cross_validate()
@@ -505,7 +527,8 @@ class Train(object):
                     check_list.append(list(map(int, line.strip().split())))
             for i, it_check in enumerate(check_list):
                 current_label = dev_label[i]
-                assert set(it_check) == set(current_label), "Fatal Error! The order is inconsistent for {}!".format(dev_label)
+                assert set(it_check) == set(current_label), \
+                    "Fatal Error! The order is inconsistent for {}!".format(dev_label_file)
         else:
             with open(dev_label_file, 'w', encoding='utf8') as f:
                 for label in dev_label:

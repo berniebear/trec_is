@@ -258,6 +258,7 @@ Use the feature selected according to NB: `['hand_crafted', 'fasttext-avg', 'ski
 - Use all default parameter with pca f1 is `0.7739`
 - Parameter search with pca is running on GPU6 (current best is `0.8063`)
 
+After searching 10 sets of parameters, current best is {'subsample': 0.9, 'n_jobs': -1, 'n_estimators': 500, 'max_depth': 8, 'learning_rate': 0.05, 'gamma': 0, 'colsample_bytree': 0.9}, best F1 is 0.8062892252224213
 
 #### Some other notes
 When we use the KFold of sklearn, we get the weighted average ratio around `3.95`.
@@ -267,6 +268,7 @@ It means the stratified method is really better than K-folder, but the differenc
 
 
 ## Todo
+- Submit four models: One single + One single event-wise + ensemble + ensemble event-wise
 - Round-trip translation / paraphrase (SemEval 2015 Task 1) to do data augmentation
 - First classify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
 - Use a better method to predict the importance score
@@ -288,7 +290,7 @@ Junpei:
 - [done] Normalization features before concatenate them
 - [done] Leave one out to select features (the `fasttext-tfidf` and `glove-avg` and `hashtag` are removed)
 - [done] Add models of linear svm and XGBoost
-- Do model ensemble (Using Probabilities as Meta-Features)
+- [half-done] Do model ensemble (Using Probabilities as Meta-Features)
 - Add neural models
 
 Xinyu:

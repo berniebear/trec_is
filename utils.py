@@ -5,6 +5,9 @@ import json
 from typing import List, Dict
 import numpy as np
 from scipy.sparse import csr_matrix
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.multiclass import OneVsRestClassifier
 
 # For processing tweets
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -104,7 +107,49 @@ def check_args_conflict(args):
         assert args.train_on_small is False
 
 
+def get_ensemble_feature(file_list: List[str]) -> np.ndarray:
+    feature_collect = []
+    for filepath in file_list:
+        feature = []
+        with open(filepath, 'r', encoding='utf8') as f:
+            for line in f:
+                feature.append(list(map(float, line.strip().split())))
+        feature_collect.append(np.asarray(feature))
+    return np.concatenate(feature_collect, axis=-1)
+
+
+def get_ensemble_label(label_file: str) -> List[List[int]]:
+    label = []
+    with open(label_file, 'r', encoding='utf8') as f:
+        for line in f:
+            label.append(list(map(int, line.strip().split())))
+    return label
+
+
+def ensemble_predict(train_x: np.ndarray, train_y: List[List[int]], test_x: np.ndarray,
+                     id2label: List[str], out_file: str):
+    mlb = MultiLabelBinarizer(classes=list(range(len(id2label))))
+    train_y = mlb.fit_transform(train_y)
+    clf = LogisticRegression(class_weight='balanced')
+    clf = OneVsRestClassifier(clf, n_jobs=-1)
+    clf.fit(train_x, train_y)
+    predict_proba = clf.predict_proba(test_x)
+    predict = np.argmax(predict_proba, axis=-1)
+    predict = [id2label[x] for x in predict]
+    with open(out_file, 'w', encoding='utf8') as f:
+        for it_predict in predict:
+            f.write("{}\n".format(it_predict))
+    print("The ensemble result has been written to {}".format(out_file))
+
+
 def anytype_f1_scorer(y_true, y_pred, id2label):
+    """
+    Notice that here y_pred is probability for each class
+    :param y_true:
+    :param y_pred:
+    :param id2label:
+    :return:
+    """
     y_pred = np.argmax(y_pred, axis=-1)
     score = evaluate_any_type(y_true, y_pred, id2label)['f1']
     return score

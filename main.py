@@ -20,7 +20,7 @@ def main():
     # Create folders and set logging format
     args.model_dir = os.path.join(args.out_dir, 'ckpt')
     args.log_dir = os.path.join(args.out_dir, 'log')
-    args.ensemble_dir = os.path.join(args.out_dir, 'ensemble')
+    args.ensemble_dir = os.path.join(args.out_dir, 'ensemble_event' if args.event_wise else 'ensemble')
     prepare_folders(args)
     logger = set_logging(args)
     logger.info("Here is the arguments of this running:")
@@ -84,12 +84,16 @@ def main():
         # Todo: Generate the formalized file after 2019-test data released
         # Todo: After 2019-test data released, add it to tweet_file_list to make sure those tweets have features
         # Todo: Convert label to the new long-label for 2019 setting
+        # Todo: Use the required format for writing final result in utils.ensemble_predict
         formal_2019_test_file = os.path.join(args.data_dir, '2019-test.txt')
         if args.event_wise:
             test_x, event2idx_list, line_num = preprocess.extract_formalized_test_data(formal_2019_test_file)
             test_predict_collect = [0] * line_num
             for event_type in utils.idx2event_type:
                 it_data_x, it_data_y, it_test_x = data_x[event_type], data_y[event_type], test_x[event_type]
+                if len(it_test_x) == 0:
+                    print("There are no event belongs to {} for the test data".format(event_type))
+                    continue
                 train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len, event_type)
                 train.train_on_all()
                 predict_score = train.predict_on_test(it_test_x)
@@ -105,6 +109,30 @@ def main():
             train = Train(args, data_x, data_y, id2label, preprocess.feature_len)
             train.train_on_all()
             train.predict_on_test(test_x)
+
+        # Step4. Do the ensemble of different model
+        if args.event_wise:
+            out_file = os.path.join(args.out_dir, 'ensemble_event_out.txt')
+            raise NotImplementedError
+        else:
+            out_file = os.path.join(args.out_dir, 'ensemble_out.txt')
+            dev_label_file = os.path.join(args.ensemble_dir, 'dev_label.txt')
+            dev_predict_file_list = []
+            test_predict_file_list = []
+            for filename in os.listdir(args.ensemble_dir):
+                if filename[:len("dev_predict_")] == "dev_predict_":
+                    dev_predict_file_list.append(os.path.join(args.ensemble_dir, filename))
+                elif filename[:len("test_predict_")] == "test_predict_":
+                    test_predict_file_list.append(os.path.join(args.ensemble_dir, filename))
+            dev_predict_file_list = sorted(dev_predict_file_list)
+            test_predict_file_list = sorted(test_predict_file_list)
+            print("There are {0} files for dev and {1} files for test".format(len(dev_predict_file_list),
+                                                                              len(test_predict_file_list)))
+            train_x = utils.get_ensemble_feature(dev_predict_file_list)
+            train_y = utils.get_ensemble_label(dev_label_file)
+            print("The shape of train_x is {0}".format(train_x.shape))
+            test_x = utils.get_ensemble_feature(test_predict_file_list)
+            utils.ensemble_predict(train_x, train_y, test_x, id2label, out_file)
 
     # The old predict script for evaluation on 2018-test data
     # predict_file = os.path.join(args.out_dir, "predict.txt")

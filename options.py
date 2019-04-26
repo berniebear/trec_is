@@ -22,8 +22,12 @@ def get_arguments():
                         help="Use random search to search for best parameters for each model")
     parser.add_argument("--random_search_n_iter", type=int, default=100,
                         help="Number of iterations to do random search (each iteration train a set of parameters)")
+    parser.add_argument("--search_by_sklearn_api", action='store_true',
+                        help="Use the sklearn API (GridSearchCV and RandomSearchCV)")
     parser.add_argument("--search_print_interval", type=int, default=20,
                         help="As random forest has much longer training time, suggested value is 3, and nb can use 20")
+    parser.add_argument("--search_skip", type=int, default=0,
+                        help="Skip some search (because some parameters have been searched in previous running)")
     parser.add_argument("--use_stratify_split", action="store_true",
                         help="Use stratify split for multi-label setting implemented based on a 2011 paper")
     parser.add_argument("--predict_mode", action="store_true",
@@ -52,7 +56,7 @@ def get_arguments():
                         help="Normalize each feature when reading them from file")
     # Model
     parser.add_argument("--model", type=str, default='bernoulli_nb',
-                        help="bernoulli_nb | rf | sgd_svm | svm_linear")
+                        help="bernoulli_nb | rf | sgd_svm | svm_linear | xgboost")
     parser.add_argument("--no_class_weight", action='store_true',
                         help="Not use different weights for each class")
     parser.add_argument("--cv_num", type=int, default=5,
