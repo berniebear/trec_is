@@ -29,7 +29,7 @@ class Preprocess(object):
         self.feature_collection = []
         self.all_available_feats = ['hand_crafted', 'fasttext-avg', 'fasttext-tfidf', 'glove-avg', 'glove-tfidf',
                                     'skip-thought', 'bert', 'fasttext-crawl', 'hashtag']
-        self.feature_used = ['hand_crafted']  # ['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']
+        self.feature_used = ['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']
         utils.print_to_log("The feature used is {}".format(self.feature_used))
 
     def _collect_feature(self, feature, feat_name):
