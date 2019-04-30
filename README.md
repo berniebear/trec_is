@@ -224,41 +224,50 @@ Using `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-avg', 'fa
 Using `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-avg', 'fasttext-crawl']` is `0.6722`.
 (so in following experiments we will discard the `hashtag` feature)
 
-Using `PCA=100` we get `0.6909` (after testing PCA=50, 100, 150, we find 100 performs best)
+- Using `PCA=100` we get `0.6909` (after testing PCA=50, 100, 150, we find 100 performs best)
 
-After doing leave-one-out feature selection, I decide to keep those features: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`.
-The current performance with bernoulli NB is `0.6768`, after adding `--pca` it achieves `0.6936`
-With `--pca` and `--event-wise` it can reach `0.8763`.
+- After doing leave-one-out feature selection, I decide to keep those features: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`.
+- The current performance with bernoulli NB is `0.6768`, after adding `--pca` it achieves `0.6936`
+- With `--use_pca` and `--event_wise` it can reach `0.7282`.
 
-After adding normalization, no matter with PCA or not, the performance drops a lot (without pca it is `0.6058`, with pca it is `0.6590`) So we may not use normalization.
+- After adding normalization, no matter with PCA or not, the performance drops a lot (without pca it is `0.6058`, with pca it is `0.6590`) So we may not use normalization.
+- After adding `late_fusion` the performance drops (from `0.6936` to `0.6368`) So we may not use late fusion.
 
-After adding `late_fusion` the performance drops (from `0.6936` to `0.6368`) So we may not use late fusion.
 
+#### The following is all about linearSVC model
+Use the feature selected according to NB: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`
+- `--use_pca`, the best f1 is `0.6934`
+    ```
+    The best parameter is `{'C': 0.1, 'class_weight': 'balanced', 'dual': False, 'penalty': 'l2'}`
+    ```
+- `--normalize_feat` but without PCA, f1 reaches `0.7496`
+- For `svm_rbf` with pca, f1 is `0.7085`, without PCA it will raise Memory error, and running time will be too long. So we will keep using linear SVM instead of kernel-based SVM.
+- `--use_cpa` and `--event_wise` get f1 `0.7201`
+- `--normalize_feat` and `--event_wise` get f1 `0.7691`
 
 
 #### The following is all about Random Forest model
 Use the feature selected according to NB: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`
 - `--use_pca` can reach `0.7832`.
 - Without pca the f1 is `0.7775`, which also takes much longer time, so we had better use pca.
-- `--use_pca` and random search parameter:
+- `--use_pca` and random search parameter can reach f1 `0.7845`:
     ```
-    The best f1 is 0.784466505561625
     The best parameter is {'criterion': 'gini', 'max_depth': 64, 'max_features': 213, 'min_samples_leaf': 5, 'min_samples_split': 43, 'n_estimators': 128, 'class_weight': 'balanced', 'n_jobs': -1}
     ```
-
-
-#### The following is all about linearSVC model
-Use the feature selected according to NB: `['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']`
-- `--use_pca`, the best f1 is `0.6934`. The best parameter is `{'C': 0.1, 'class_weight': 'balanced', 'dual': False, 'penalty': 'l2'}`
-- `--normalize_feat` but without PCA, f1 reaches `0.7496`
-- For `svm_rbf` with pca, f1 is `0.7085`, without PCA it will raise Memory error, and running time will be too long.
+- `--use_pca` with `--event_wise` can reach f1 `0.7957`
 
 
 #### The following is all about xgboost model
 - Use all default parameter with pca f1 is `0.7739`
-- Parameter search with pca is running on GPU6 (current best is `0.8063`)
+- `--use_pca` and random search parameter can reach f1 `0.8063`
+    ```
+    The best parameter is {'subsample': 0.9, 'n_jobs': -1, 'n_estimators': 500, 'max_depth': 8, 'learning_rate': 0.05, 'gamma': 0, 'colsample_bytree': 0.9}
+    ```
+- `--use_pca` with `--event_wise` can reach f1 `0.8117`
 
-After searching 10 sets of parameters, current best is {'subsample': 0.9, 'n_jobs': -1, 'n_estimators': 500, 'max_depth': 8, 'learning_rate': 0.05, 'gamma': 0, 'colsample_bytree': 0.9}, best F1 is 0.8062892252224213
+
+#### The following is all about ensemble
+- Ensemble of nb (`0.6936`) and svm_linear (`0.6934`) with svm model can get f1 `0.7629`.
 
 #### Some other notes
 When we use the KFold of sklearn, we get the weighted average ratio around `3.95`.
@@ -281,6 +290,16 @@ It means the stratified method is really better than K-folder, but the differenc
 - Retrain skip-thought on additional data
 - Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
 
+### Apr 26 Discussion
+
+Junpei:
+
+- Get event-wise result for random forest and XGBoost
+- Get ensemble result (use **Weighted Majority Algorithm** as a simple baseline)
+- Image feature
+- BERT use CLS and multi-layer
+- Neural models
+
 ### Apr18 Discussion
 
 Junpei:
@@ -291,7 +310,6 @@ Junpei:
 - [done] Leave one out to select features (the `fasttext-tfidf` and `glove-avg` and `hashtag` are removed)
 - [done] Add models of linear svm and XGBoost
 - [half-done] Do model ensemble (Using Probabilities as Meta-Features)
-- Add neural models
 
 Xinyu:
 - plug fasttext trained on Twitter data

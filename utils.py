@@ -4,13 +4,12 @@ import logging
 import json
 from typing import List, Dict
 import numpy as np
-from scipy.sparse import csr_matrix
 from sklearn.linear_model import LogisticRegression
+from sklearn.svm import LinearSVC, SVC
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.multiclass import OneVsRestClassifier
 
 # For processing tweets
-from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.stem import PorterStemmer
 from nltk.tokenize import TweetTokenizer
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -107,6 +106,22 @@ def check_args_conflict(args):
         assert args.train_on_small is False
 
 
+def get_predict_file_list(ensemble_dir, prefix):
+    """
+    Notice we sorted the file to make sure the order is consistent
+    :param ensemble_dir:
+    :param prefix: such as 'dev_predict_'
+    :return:
+    """
+    predict_file_list = []
+    for filename in os.listdir(ensemble_dir):
+        if filename[:len(prefix)] == prefix:
+            predict_file_list.append(os.path.join(ensemble_dir, filename))
+    predict_file_list = sorted(predict_file_list)
+    print("There are {0} files for {1}".format(len(predict_file_list), prefix))
+    return predict_file_list
+
+
 def get_ensemble_feature(file_list: List[str]) -> np.ndarray:
     feature_collect = []
     for filepath in file_list:
@@ -126,6 +141,37 @@ def get_ensemble_label(label_file: str) -> List[List[int]]:
     return label
 
 
+def ensemble_cross_validate(data_x: np.ndarray, data_y: List[List[int]], id2label: List[str]):
+    mlb = MultiLabelBinarizer(classes=list(range(len(id2label))))
+    data_y = mlb.fit_transform(data_y)
+    # clf = LinearSVC()
+    clf = SVC(probability=True)
+    clf = OneVsRestClassifier(clf, n_jobs=-1)
+    metric_names = ['accuracy', 'precision', 'recall', 'f1']
+    metric_values = {metric_name: [] for metric_name in metric_names}
+
+    index_list = get_k_fold_index_list(data_y, id2label, cv_num=5)
+    for train_idx_list, test_idx_list in index_list:
+        X_train = data_x[train_idx_list]
+        y_train = data_y[train_idx_list]
+        X_test = data_x[test_idx_list]
+        y_test = data_y[test_idx_list]
+        clf.fit(X_train, y_train)
+        if isinstance(clf.estimator, LinearSVC):
+            predict_proba = clf.decision_function(X_test)
+        else:
+            predict_proba = clf.predict_proba(X_test)
+        predict = np.argmax(predict_proba, axis=-1)
+        metric_results = evaluate_any_type(y_test, predict, id2label)
+        for metric_name in metric_names:
+            metric_values[metric_name].append([metric_results[metric_name], len(y_test)])
+    metric_weighted_avg = get_weighted_avg(metric_values, metric_names)
+    print_to_log('For ensemble, the model used is {}'.format(clf.estimator.__class__.__name__))
+    for metric_name in metric_names:
+        print_to_log('For ensemble, {0} score in cv is {1}'.format(metric_name, metric_values[metric_name]))
+        print_to_log('For ensemblem average {0} score is {1}'.format(metric_name, metric_weighted_avg[metric_name]))
+
+
 def ensemble_predict(train_x: np.ndarray, train_y: List[List[int]], test_x: np.ndarray,
                      id2label: List[str], out_file: str):
     mlb = MultiLabelBinarizer(classes=list(range(len(id2label))))
@@ -140,6 +186,47 @@ def ensemble_predict(train_x: np.ndarray, train_y: List[List[int]], test_x: np.n
         for it_predict in predict:
             f.write("{}\n".format(it_predict))
     print("The ensemble result has been written to {}".format(out_file))
+
+
+def get_weighted_avg(metric_values, metric_names: List[str]):
+    metric_accumulate = {metric_name: 0.0 for metric_name in metric_names}
+    count = {metric_name: 0 for metric_name in metric_names}
+    for metric_name in metric_names:
+        for value, length in metric_values[metric_name]:
+            metric_accumulate[metric_name] += value * length
+            count[metric_name] += length
+    for metric_name in metric_names:
+        metric_accumulate[metric_name] /= count[metric_name]
+    return metric_accumulate
+
+
+def get_k_fold_index_list(data_y, id2label: List[str], cv_num: int):
+    """
+    Generate a index list for the k-fold cross-validation, in the same format as the index returned by sklearn KFold.
+    Use the stratified sampling for multi-label setting.
+    Notice here the data_y should be the label after being binarized (the one-hot label)
+    :param data_y:
+    :param id2label:
+    :param cv_num:
+    :return: The returned value could be used as
+                index_list = get_k_fold_index_list()
+                for train_idx_list, test_idx_list in index_list:
+                    X_train = data_x[train_idx_list]
+                    y_train = data_y[train_idx_list]
+                    X_test = data_x[test_idx_list]
+                    y_test = data_y[test_idx_list]
+    """
+    stratified_data_ids, _ = stratify_split(data_y, list(range(len(id2label))), [1 / cv_num] * cv_num, one_hot=True)
+    index_list = []
+    for i in range(cv_num):
+        test_idx = stratified_data_ids[i]
+        train_idx = []
+        for ii in range(cv_num):
+            if ii == i:
+                continue
+            train_idx += stratified_data_ids[ii]
+        index_list.append((train_idx, test_idx))
+    return index_list
 
 
 def anytype_f1_scorer(y_true, y_pred, id2label):

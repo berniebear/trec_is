@@ -195,7 +195,7 @@ class Train(object):
             if not param:
                 param = {
                     'n_estimators': 128,
-                    "n_jobs": -1,
+                    "n_jobs": 1,
                     'class_weight': class_weight,
                     'criterion': 'gini',
                     'max_depth': 64,
@@ -206,15 +206,18 @@ class Train(object):
             clf = RandomForestClassifier(**param)
         elif model_name == 'xgboost':
             if not param:
-                param = {
-                    'max_depth': 3,
-                    'n_estimators': 100,
-                    "n_jobs": -1,
-                }
+                param = {'subsample': 0.9,
+                         'n_jobs': 1,
+                         'n_estimators': 500,
+                         'max_depth': 8,
+                         'learning_rate': 0.05,
+                         'gamma': 0,
+                         'colsample_bytree': 0.9,
+                         }
             clf = XGBClassifier(**param)
         else:
             raise NotImplementedError
-        return OneVsRestClassifier(clf, n_jobs=-1)
+        return OneVsRestClassifier(clf, n_jobs=self.args.n_jobs)
 
     def _random_search_best_para(self, n_iter):
         if self.args.search_by_sklearn_api:
@@ -268,7 +271,7 @@ class Train(object):
                 "subsample": [0.8, 0.9, 1.0],
                 "colsample_bytree": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
                 "gamma": [0, 1, 5],
-                "n_jobs": [-1],
+                "n_jobs": [1],
             }
         else:
             raise ValueError("The model {} doesn't support parameter search in current stage".format(self.args.model))
@@ -307,7 +310,7 @@ class Train(object):
                 "criterion": ["gini", "entropy"],
                 "n_estimators": [128],
                 "class_weight": ["balanced"],
-                "n_jobs": [-1],
+                "n_jobs": [1],
             }
         elif self.args.model == 'bernoulli_nb':
             param_dist = {
@@ -330,7 +333,7 @@ class Train(object):
                 "subsample": [0.8, 0.9, 1.0],
                 "colsample_bytree": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
                 "gamma": [0, 1, 5],
-                "n_jobs": [-1],
+                "n_jobs": [1],
             }
         else:
             raise ValueError("The model {} doesn't support parameter search in current stage".format(self.args.model))
@@ -369,7 +372,7 @@ class Train(object):
         kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
         metric_values = {metric_name: [] for metric_name in self.metric_names}
         clf = BernoulliNB(alpha=0.8490, binarize=0.3086, fit_prior=True)
-        clf = OneVsRestClassifier(clf, n_jobs=-1)
+        clf = OneVsRestClassifier(clf, n_jobs=self.args.n_jobs)
         for train_idx_list, test_idx_list in kf.split(self.data_x, self.data_y):
             X_train = self.data_x[train_idx_list]
             y_train = self.data_y[train_idx_list]
@@ -395,18 +398,7 @@ class Train(object):
         :return:
         """
         if self.args.use_stratify_split:
-            stratified_data_ids, _ = utils.stratify_split(self.data_y, list(range(len(self.id2label))),
-                                                          [1 / self.args.cv_num] * self.args.cv_num, one_hot=True)
-            index_list = []
-            for i in range(self.args.cv_num):
-                test_idx = stratified_data_ids[i]
-                train_idx = []
-                for ii in range(self.args.cv_num):
-                    if ii == i:
-                        continue
-                    train_idx += stratified_data_ids[ii]
-                index_list.append((train_idx, test_idx))
-
+            index_list = utils.get_k_fold_index_list(self.data_y, self.id2label, self.args.cv_num)
         else:
             # StratifiedKFold doesn't support multi-label setting, so we can only use KFold
             kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
@@ -490,15 +482,7 @@ class Train(object):
             return metric_weighted_avg['f1']
 
     def _get_weighted_avg(self, metric_values):
-        metric_accumulate = {metric_name: 0.0 for metric_name in self.metric_names}
-        count = {metric_name: 0 for metric_name in self.metric_names}
-        for metric_name in self.metric_names:
-            for value, length in metric_values[metric_name]:
-                metric_accumulate[metric_name] += value * length
-                count[metric_name] += length
-        for metric_name in self.metric_names:
-            metric_accumulate[metric_name] /= count[metric_name]
-        return metric_accumulate
+        return utils.get_weighted_avg(metric_values, self.metric_names)
 
     def _write_predict_and_label(self, dev_label: List[set], dev_predict: np.ndarray, custom_postfix: str):
         """

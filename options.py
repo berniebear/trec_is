@@ -32,6 +32,8 @@ def get_arguments():
                         help="Use stratify split for multi-label setting implemented based on a 2011 paper")
     parser.add_argument("--predict_mode", action="store_true",
                         help="In this mode, write the dev_predict, dev_label, test_predict to file, for later ensemble")
+    parser.add_argument("--ensemble", action='store_true',
+                        help="After running all models with --predict_mode, you can run with it to ensemble all models")
     # Data path
     parser.add_argument("--out_dir", type=str, default='out',
                         help="Directory contains the output things, including the log and ckpt")
@@ -61,4 +63,6 @@ def get_arguments():
                         help="Not use different weights for each class")
     parser.add_argument("--cv_num", type=int, default=5,
                         help="The n-fold cross-validation")
+    parser.add_argument("--n_jobs", type=int, default=4,
+                        help="Can set to -1 to use all cpu cores")
     return parser.parse_args()

@@ -85,6 +85,7 @@ def main():
         # Todo: After 2019-test data released, add it to tweet_file_list to make sure those tweets have features
         # Todo: Convert label to the new long-label for 2019 setting
         # Todo: Use the required format for writing final result in utils.ensemble_predict
+        # Todo: Submit one file of multi-classification, which means can use .fit() instead of argmax(.predict_proba,-1)
         formal_2019_test_file = os.path.join(args.data_dir, '2019-test.txt')
         if args.event_wise:
             test_x, event2idx_list, line_num = preprocess.extract_formalized_test_data(formal_2019_test_file)
@@ -110,6 +111,7 @@ def main():
             train.train_on_all()
             train.predict_on_test(test_x)
 
+    if args.ensemble:
         # Step4. Do the ensemble of different model
         if args.event_wise:
             out_file = os.path.join(args.out_dir, 'ensemble_event_out.txt')
@@ -117,20 +119,12 @@ def main():
         else:
             out_file = os.path.join(args.out_dir, 'ensemble_out.txt')
             dev_label_file = os.path.join(args.ensemble_dir, 'dev_label.txt')
-            dev_predict_file_list = []
-            test_predict_file_list = []
-            for filename in os.listdir(args.ensemble_dir):
-                if filename[:len("dev_predict_")] == "dev_predict_":
-                    dev_predict_file_list.append(os.path.join(args.ensemble_dir, filename))
-                elif filename[:len("test_predict_")] == "test_predict_":
-                    test_predict_file_list.append(os.path.join(args.ensemble_dir, filename))
-            dev_predict_file_list = sorted(dev_predict_file_list)
-            test_predict_file_list = sorted(test_predict_file_list)
-            print("There are {0} files for dev and {1} files for test".format(len(dev_predict_file_list),
-                                                                              len(test_predict_file_list)))
+            dev_predict_file_list = utils.get_predict_file_list(args.ensemble_dir, 'dev_predict_')
+            test_predict_file_list = utils.get_predict_file_list(args.ensemble_dir, 'test_predict_')
             train_x = utils.get_ensemble_feature(dev_predict_file_list)
             train_y = utils.get_ensemble_label(dev_label_file)
-            print("The shape of train_x is {0}".format(train_x.shape))
+            print("The shape of ensemble train_x is {0}".format(train_x.shape))
+            utils.ensemble_cross_validate(train_x, train_y, id2label)
             test_x = utils.get_ensemble_feature(test_predict_file_list)
             utils.ensemble_predict(train_x, train_y, test_x, id2label, out_file)
 
