@@ -8,6 +8,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC, SVC
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.multiclass import OneVsRestClassifier
+from sklearn.calibration import CalibratedClassifierCV
 
 # For processing tweets
 from nltk.stem import PorterStemmer
@@ -141,12 +142,9 @@ def get_ensemble_label(label_file: str) -> List[List[int]]:
     return label
 
 
-def ensemble_cross_validate(data_x: np.ndarray, data_y: List[List[int]], id2label: List[str]):
-    mlb = MultiLabelBinarizer(classes=list(range(len(id2label))))
-    data_y = mlb.fit_transform(data_y)
-    # clf = LinearSVC()
-    clf = SVC(probability=True)
-    clf = OneVsRestClassifier(clf, n_jobs=-1)
+def ensemble_cross_validate(data_x: np.ndarray, data_y: List[List[int]], id2label: List[str],
+                            mlb: MultiLabelBinarizer, ensemble: str):
+    data_y = mlb.transform(data_y)
     metric_names = ['accuracy', 'precision', 'recall', 'f1']
     metric_values = {metric_name: [] for metric_name in metric_names}
 
@@ -156,36 +154,49 @@ def ensemble_cross_validate(data_x: np.ndarray, data_y: List[List[int]], id2labe
         y_train = data_y[train_idx_list]
         X_test = data_x[test_idx_list]
         y_test = data_y[test_idx_list]
-        clf.fit(X_train, y_train)
-        if isinstance(clf.estimator, LinearSVC):
-            predict_proba = clf.decision_function(X_test)
-        else:
-            predict_proba = clf.predict_proba(X_test)
-        predict = np.argmax(predict_proba, axis=-1)
+        predict = ensemble_train_and_predict(X_train, y_train, X_test, id2label, ensemble)
         metric_results = evaluate_any_type(y_test, predict, id2label)
         for metric_name in metric_names:
             metric_values[metric_name].append([metric_results[metric_name], len(y_test)])
     metric_weighted_avg = get_weighted_avg(metric_values, metric_names)
-    print_to_log('For ensemble, the model used is {}'.format(clf.estimator.__class__.__name__))
+    print_to_log('For ensemble, the model used is {}'.format(ensemble))
     for metric_name in metric_names:
         print_to_log('For ensemble, {0} score in cv is {1}'.format(metric_name, metric_values[metric_name]))
         print_to_log('For ensemblem average {0} score is {1}'.format(metric_name, metric_weighted_avg[metric_name]))
 
 
-def ensemble_predict(train_x: np.ndarray, train_y: List[List[int]], test_x: np.ndarray,
-                     id2label: List[str], out_file: str):
-    mlb = MultiLabelBinarizer(classes=list(range(len(id2label))))
-    train_y = mlb.fit_transform(train_y)
-    clf = LogisticRegression(class_weight='balanced')
-    clf = OneVsRestClassifier(clf, n_jobs=-1)
-    clf.fit(train_x, train_y)
-    predict_proba = clf.predict_proba(test_x)
-    predict = np.argmax(predict_proba, axis=-1)
-    predict = [id2label[x] for x in predict]
-    with open(out_file, 'w', encoding='utf8') as f:
-        for it_predict in predict:
-            f.write("{}\n".format(it_predict))
-    print("The ensemble result has been written to {}".format(out_file))
+def ensemble_train_and_predict(train_x: np.ndarray, train_y: np.ndarray, test_x: np.ndarray,
+                               id2label: List[str], ensemble: str):
+    """
+    # Todo: Another option is to store the multi-label predicted by each base model, and then do the voting
+    Currently, for the voting method, we add all the predict_prob by the model
+    :param train_x:
+    :param train_y: Notice here train_y need to be the one-hot representation produced by mlb.transform()
+    :param test_x:
+    :param id2label:
+    :param ensemble:
+    :return:
+    """
+    if ensemble == 'voting':
+        category_num = len(id2label)
+        split_num = test_x.shape[1] / category_num
+        split_probas = np.split(test_x, split_num, axis=-1)
+        merged_proba = np.sum(np.asarray(split_probas), axis=0)
+        predict = np.argmax(merged_proba, axis=-1)
+    else:
+        if ensemble == 'svm_linear':
+            clf = SVC(kernel='linear', probability=True)
+        elif ensemble == 'svm_rbf':
+            clf = SVC(probability=True)
+        elif ensemble == 'logistic_reg':
+            clf = LogisticRegression(class_weight='balanced')
+        else:
+            raise ValueError("Invalid value {} for --ensemble".format(ensemble))
+        clf = OneVsRestClassifier(clf, n_jobs=-1)
+        clf.fit(train_x, train_y)
+        predict_proba = clf.predict_proba(test_x)
+        predict = np.argmax(predict_proba, axis=-1)
+    return predict
 
 
 def get_weighted_avg(metric_values, metric_names: List[str]):

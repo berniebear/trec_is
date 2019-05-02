@@ -111,7 +111,7 @@ def main():
             train.train_on_all()
             train.predict_on_test(test_x)
 
-    if args.ensemble:
+    if args.ensemble is not None:
         # Step4. Do the ensemble of different model
         if args.event_wise:
             out_file = os.path.join(args.out_dir, 'ensemble_event_out.txt')
@@ -124,9 +124,15 @@ def main():
             train_x = utils.get_ensemble_feature(dev_predict_file_list)
             train_y = utils.get_ensemble_label(dev_label_file)
             print("The shape of ensemble train_x is {0}".format(train_x.shape))
-            utils.ensemble_cross_validate(train_x, train_y, id2label)
+            utils.ensemble_cross_validate(train_x, train_y, id2label, train.mlb, args.ensemble)
             test_x = utils.get_ensemble_feature(test_predict_file_list)
-            utils.ensemble_predict(train_x, train_y, test_x, id2label, out_file)
+            predict = utils.ensemble_train_and_predict(train_x, train.mlb.transform(train_y), test_x,
+                                                       id2label, args.ensemble)
+            predict = [id2label[x] for x in predict]
+            with open(out_file, 'w', encoding='utf8') as f:
+                for it_predict in predict:
+                    f.write("{}\n".format(it_predict))
+            print("The ensemble result has been written to {}".format(out_file))
 
     # The old predict script for evaluation on 2018-test data
     # predict_file = os.path.join(args.out_dir, "predict.txt")

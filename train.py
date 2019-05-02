@@ -14,6 +14,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import BernoulliNB, GaussianNB
 from sklearn.utils import shuffle
+from sklearn.calibration import CalibratedClassifierCV
 from xgboost import XGBClassifier
 
 from utils import print_to_log, anytype_f1_scorer
@@ -84,10 +85,7 @@ class Train(object):
         predict_score = np.zeros([data_x.shape[0], len(self.id2label)], dtype=np.float64)
         for i_clf, feat_len in enumerate(self.feature_lens):
             end_idx = start_idx + feat_len
-            if 'svm' in self.args.model:
-                predict_score += self.clf[i_clf].decision_function(data_x[:, start_idx: end_idx])
-            else:
-                predict_score += self.clf[i_clf].predict_proba(data_x[:, start_idx: end_idx])
+            predict_score += self.clf[i_clf].predict_proba(data_x[:, start_idx: end_idx])
             start_idx = end_idx
         return np.argmax(predict_score, axis=-1)
 
@@ -101,10 +99,7 @@ class Train(object):
         labels_count = [dict() for i in range(data_x.shape[0])]
         for i_clf, feat_len in enumerate(self.feature_lens):
             end_idx = start_idx + feat_len
-            if 'svm' in self.args.model:
-                predict_score = self.clf[i_clf].decision_function(data_x[:, start_idx: end_idx])
-            else:
-                predict_score = self.clf[i_clf].predict_proba(data_x[:, start_idx: end_idx])
+            predict_score = self.clf[i_clf].predict_proba(data_x[:, start_idx: end_idx])
             predict_label = np.argmax(predict_score, axis=-1)
             for i_idx, it_label in enumerate(predict_label):
                 labels_count[i_idx][it_label] = labels_count[i_idx].get(it_label, 0) + 1
@@ -178,13 +173,13 @@ class Train(object):
         elif model_name == 'svm_linear':
             if not param:
                 param = {'class_weight': class_weight, "C": 0.1, "dual": False, "penalty": "l2"}
-            clf = LinearSVC(**param)  # Set dual=False when training num >> feature num
+            clf = CalibratedClassifierCV(LinearSVC(**param))  # Set dual=False when training num >> feature num
         elif model_name == 'svm_rbf':
-            clf = SVC(kernel='rbf', class_weight=class_weight, gamma='auto')
+            clf = SVC(kernel='rbf', class_weight=class_weight, gamma='auto', probability=True)
         elif model_name == 'svm_rbf_scale':
-            clf = SVC(kernel='rbf', class_weight=class_weight, gamma='scale')
+            clf = SVC(kernel='rbf', class_weight=class_weight, gamma='scale', probability=True)
         elif model_name == 'svm_chi2':
-            clf = SVC(kernel=chi2_kernel, class_weight=class_weight)
+            clf = SVC(kernel=chi2_kernel, class_weight=class_weight, probability=True)
         elif model_name == 'gs_nb':
             clf = GaussianNB()
         elif model_name == 'bernoulli_nb':
@@ -255,7 +250,7 @@ class Train(object):
                 "estimator__fit_prior": [True, False],
             }
         elif self.args.model == 'svm_linear':
-            clf = LinearSVC()
+            clf = CalibratedClassifierCV(LinearSVC())
             param_dist = {
                 "penalty": ['l1', 'l2'],
                 "C": [0.1, 1, 10, 100, 1000],
@@ -461,10 +456,7 @@ class Train(object):
                 metric_values[metric_name].append([metric_results[metric_name], len(y_test)])
 
             if self.args.predict_mode:
-                if 'svm' in self.args.model:
-                    predict_score = self.clf[0].decision_function(X_test)
-                else:
-                    predict_score = self.clf[0].predict_proba(X_test)
+                predict_score = self.clf[0].predict_proba(X_test)
                 dev_predict[test_idx_list] = predict_score
 
         if self.args.predict_mode:
@@ -536,11 +528,7 @@ class Train(object):
         custom_postfix = '_{}'.format(self.event_type) if self.args.event_wise else ''
         test_predict_file = os.path.join(self.args.ensemble_dir, 'test_predict_{0}{1}.txt'.format(
             self.args.model, custom_postfix))
-
-        if 'svm' in self.args.model:
-            predict_score = self.clf[0].decision_function(test_data)
-        else:
-            predict_score = self.clf[0].predict_proba(test_data)
+        predict_score = self.clf[0].predict_proba(test_data)
 
         if self.args.event_wise:
             return predict_score

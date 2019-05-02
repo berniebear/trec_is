@@ -32,8 +32,9 @@ def get_arguments():
                         help="Use stratify split for multi-label setting implemented based on a 2011 paper")
     parser.add_argument("--predict_mode", action="store_true",
                         help="In this mode, write the dev_predict, dev_label, test_predict to file, for later ensemble")
-    parser.add_argument("--ensemble", action='store_true',
-                        help="After running all models with --predict_mode, you can run with it to ensemble all models")
+    parser.add_argument("--ensemble", type=str, default=None,
+                        help="After running all models with --predict_mode, you can run with it to ensemble all models"
+                             "Can choose from voting | svm_linear | svm_rbf | logistic_reg")
     # Data path
     parser.add_argument("--out_dir", type=str, default='out',
                         help="Directory contains the output things, including the log and ckpt")
