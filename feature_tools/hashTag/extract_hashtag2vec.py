@@ -13,10 +13,10 @@ def get_arguments():
     return parser.parse_args()
 
 
-def collect_all_hashtags():
+def collect_all_hashtags(test=False):
     hashtags_collect = set()
     tweetid2hashtags = dict()
-    all_tweets_file = '../../data/all-tweets.txt'
+    all_tweets_file = '../../data/all-tweets.txt' if not test else '../../data/all-tweets-2019.txt'
     with open(all_tweets_file, 'r', encoding='utf8') as f:
         for line in f:
             content = json.loads(line.strip())
@@ -68,7 +68,7 @@ def get_feature_by_tweet_id_file(feat_dim: int, hashtag2vec, tweetid2hashtags, t
 def main():
     args = get_arguments()
     fasttext_model_path = '../../../data/text_sample_2013to2016_gensim_200.model'
-    hashtags_collect, tweetid2hashtags = collect_all_hashtags()
+    hashtags_collect, tweetid2hashtags = collect_all_hashtags(test=args.input_file.endswith("2019.txt"))
     hashtag2vec, feat_dim = get_hashtag2vec(hashtags_collect, fasttext_model_path)
     vectors = get_feature_by_tweet_id_file(feat_dim, hashtag2vec, tweetid2hashtags, args.input_file)
     np.save(args.output_file, vectors)

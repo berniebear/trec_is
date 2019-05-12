@@ -5,21 +5,72 @@ import json
 def merge_tweets_v2():
     """
     For merging tweets downloaded by TREC-IS-Client-v2.jar
+    (compatible with the TREC-IS-Client-v3, because the downloaded data format is the same)
+    Notice we cannot merge all tweets of 2018 and 2019 together, because we should assume the test data is invisible,
+        so the PCA and some other things could be trained on 2018 and appiled on 2019
+    For some tweets in 2019-test, different entities are in different keys, not sure if it dues to twitter API
     :return:
     """
-    formatted_tweet_list = []
+    filename_list = []
     for filename in os.listdir('.'):
         if filename.endswith(".json"):
-            with open(filename, 'r', encoding='utf8') as f:
-                for line in f:
-                    content = json.loads(line)
-                    formatted_content = json.loads(content['allProperties']['srcjson'])
-                    formatted_content['full_text'] = formatted_content['text']
+            filename_list.append(filename)
+    filename_list = sorted(filename_list)
+
+    formatted_tweet_list = []
+    formatted_tweet_list_2019 = []
+    count_inconsistent = 0
+    for filename in filename_list:
+        with open(filename, 'r', encoding='utf8') as f:
+            for line in f:
+                content = json.loads(line)
+                formatted_content = json.loads(content['allProperties']['srcjson'])
+                formatted_content['full_text'] = formatted_content['text']
+
+                if 'entities' not in formatted_content:
+                    count_inconsistent += 1
+                    entities = dict()
+                    entities["symbols"] = formatted_content['symbolEntities']
+                    entities["urls"] = formatted_content['urlEntities']
+                    entities["hashtags"] = formatted_content['hashtagEntities']
+                    entities["user_mentions"] = formatted_content['userMentionEntities']
+                    entities["media"] = formatted_content['mediaEntities']
+                    # To make the "start" and "end" API consistent with others
+                    for entity_name in ["hashtags", "user_mentions", "urls"]:
+                        for iEntity, entity in enumerate(entities[entity_name]):
+                            entity['indices'] = [entity['start'], entity['end']]
+                            entities[entity_name][iEntity] = entity
+                    formatted_content['entities'] = entities
+                    # Some other API convert
+                    formatted_content['retweet_count'] = formatted_content['retweetCount']
+                    formatted_content['favorite_count'] = formatted_content['favoriteCount']
+                    formatted_content['user']['favourites_count'] = formatted_content['user']['favouritesCount']
+                    formatted_content['user']['followers_count'] = formatted_content['user']['followersCount']
+                    formatted_content['user']['statuses_count'] = formatted_content['user']['statusesCount']
+                    formatted_content['user']['geo_enabled'] = formatted_content['user']['isGeoEnabled']
+                    formatted_content['user']['verified'] = formatted_content['user']['isVerified']
+                    formatted_content['user']['listed_count'] = formatted_content['user']['listedCount']
+                    formatted_content['user']['friends_count'] = formatted_content['user']['friendsCount']
+
+                if filename.startswith("trecis2019"):
+                    formatted_tweet_list_2019.append(formatted_content)
+                else:
                     formatted_tweet_list.append(formatted_content)
+
+    if count_inconsistent > 0:
+        print("There are {} tweets have inconsistent API about the entities, "
+              "and they are automatically converted".format(count_inconsistent))
+    print("There are {0} tweets for 2018 and {1} tweets for 2019".format(
+        len(formatted_tweet_list), len(formatted_tweet_list_2019)))
 
     outfile = '../data/all-tweets.txt'
     with open(outfile, 'w', encoding='utf8') as fout:
         for tweet in formatted_tweet_list:
+            fout.write(json.dumps(tweet) + '\n')
+
+    outfile = '../data/all-tweets-2019.txt'
+    with open(outfile, 'w', encoding='utf8') as fout:
+        for tweet in formatted_tweet_list_2019:
             fout.write(json.dumps(tweet) + '\n')
 
 

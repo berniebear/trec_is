@@ -290,15 +290,18 @@ It means the stratified method is really better than K-folder, but the differenc
 - Retrain skip-thought on additional data
 - Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
 
+### May 7 Discussion
+- Wait for 2019 test as well as metric release and adjust the model
+- Image feature
+- BERT use CLS and multi-layer
+- Neural models
+
 ### Apr 26 Discussion
 
 Junpei:
 
-- Get event-wise result for random forest and XGBoost
-- Get ensemble result (use **Weighted Majority Algorithm** as a simple baseline)
-- Image feature
-- BERT use CLS and multi-layer
-- Neural models
+- [done] Get event-wise result for random forest and XGBoost
+- [done] Get ensemble result (use **Weighted Majority Algorithm** as a simple baseline)
 
 ### Apr18 Discussion
 

@@ -3,6 +3,11 @@
 All those tools are external tools to generate features.
 The input format should be a file, where each line is a sentence, and the tool will generate a file where each line contains the info about the feature of that sentence.
 
+If you want to extract all features, the simple usage is running
+```bash
+bash extract_features.sh
+```
+
 ### BERT
 https://github.com/google-research/bert#using-bert-to-extract-fixed-feature-vectors-like-elmo
 
@@ -14,7 +19,9 @@ Then read that json file and process it to get the vector of this.
 1. Set the `input_file` and `output_file` in `get_embedding.sh`
 1. Run the `bash get_embedding.sh`
 
-Tips: Can run on Google Colab because it only needs several hours
+Tips: 
+- Can run on Google Colab because it only needs several hours.
+- If you want to get some other embeddings (such as the embedding combined by tf-idf), you can edit the code around line 400 in `extract_sent_features.py`
 
 ### Skip-thoughts
 
@@ -25,6 +32,13 @@ Here we use the skip-thought code implemented by TensorFlow Examples [here](http
 1. Set the `skip_thought_dir` in `extract_feature.py`
 1. Set the `input_file` and `output_file` in `get_embedding.sh`
 1. Run the `bash get_embedding.sh`
+
+### gloveAndFasttext
+
+Use glove and fasttext (provided by TREC host trained on 1M tweets) to get the embedding.
+It will generate four embedding files, including the glove/fasttext + use avg/tf-idf to do the combination.
+
+1. Direct run the `bash get_embedding.sh`
 
 ### FastTextCrawl
 

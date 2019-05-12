@@ -1,4 +1,5 @@
 from typing import List, Dict
+import pickle
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import normalize
@@ -7,12 +8,13 @@ import utils
 
 
 class Preprocess(object):
-    def __init__(self, args, tweetid_list: List[str], tweet_content_list: List[dict], label2id: dict):
+    def __init__(self, args, tweetid_list: List[str], tweet_content_list: List[dict], label2id: dict,
+                 tweet_id_out_file: str, test=False):
         """
         Use feature_used to control which features are used for sentence-level feature extraction.
             Currently available features:
-                'hand_crafted', 'fasttext', 'skip_thought', 'bert', 'glove', 'fasttext_crawl', 'hashtag'
-            Todo: add 'glove_keywords'
+                ['hand_crafted', 'fasttext-avg', 'fasttext-tfidf', 'glove-avg', 'glove-tfidf',
+                'skip-thought', 'bert-avg/CLS-1/4/8', 'fasttext-crawl', 'hashtag']
         :param args:
         :param tweetid_list:
         :param tweet_content_list:
@@ -22,14 +24,15 @@ class Preprocess(object):
         self.tweetid_list = tweetid_list
         self.tweet_content_list = tweet_content_list
         self.label2id = label2id
+        self.tweet_id_out_file = tweet_id_out_file
+        self.test = test
         self.train_tweet = []
         self.train_label = []
         self.tweetid2feature = dict()
         self.feature_len = None
         self.feature_collection = []
-        self.all_available_feats = ['hand_crafted', 'fasttext-avg', 'fasttext-tfidf', 'glove-avg', 'glove-tfidf',
-                                    'skip-thought', 'bert', 'fasttext-crawl', 'hashtag']
-        self.feature_used = ['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert', 'glove-tfidf', 'fasttext-crawl']
+        self.feature_used = ['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert-avg-1',
+                             'glove-tfidf', 'fasttext-crawl']
         utils.print_to_log("The feature used is {}".format(self.feature_used))
 
     def _collect_feature(self, feature, feat_name):
@@ -37,13 +40,31 @@ class Preprocess(object):
         utils.print_to_log("The shape of {0}_feature is {1}".format(feat_name, feature.shape))
 
     def _read_feature_from_file(self, feat_name: str):
-        tweetid2vec = utils.get_tweetid2vec(self.args.tweet_id_out_file, self.args.out_dir, feat_name)
+        """
+        Notice all feature files of 2019 test data should have a postfix, such as "fasttext-crawl-vec-2019.npy"
+        It is specifed in the get_embedding.sh in each folder in 'feature_tools'
+        :param feat_name:
+        :return:
+        """
+        vecfile_postfix = "-2019" if self.test else ""
+        tweetid2vec = utils.get_tweetid2vec(self.tweet_id_out_file, self.args.out_dir, feat_name, vecfile_postfix)
         feature = utils.extract_feature_by_dict(self.tweetid_list, tweetid2vec, feat_name)
+
         if self.args.use_pca:
-            pca = PCA(n_components=self.args.pca_dim)
-            feature = pca.fit_transform(feature)
+            pca_model_filename = 'pca_{}.pkl'.format(feat_name)
+            if self.test:
+                with open(pca_model_filename, 'rb') as f:
+                    pca = pickle.load(f)
+                    feature = pca.transform(feature)
+            else:
+                pca = PCA(n_components=self.args.pca_dim)
+                feature = pca.fit_transform(feature)
+                with open(pca_model_filename, 'wb') as f:
+                    pickle.dump(pca, f)
+
         if self.args.normalize_feat:
             feature = normalize(feature)
+
         self._collect_feature(feature, feat_name)
 
     def extract_features(self):
@@ -67,7 +88,8 @@ class Preprocess(object):
         else:  # If not use late fusion, we treat the concatenated feature as a whole feature
             self.feature_len = [whole_feature_matrix.shape[-1]]
 
-        assert len(self.tweetid_list) == whole_feature_matrix.shape[0]
+        assert len(self.tweetid_list) == whole_feature_matrix.shape[0], \
+            "The number of tweets is inconsistent, please check if you re-generate features for the new tweetid list"
         for i, tweetid in enumerate(self.tweetid_list):
             self.tweetid2feature[tweetid] = whole_feature_matrix[i]
 

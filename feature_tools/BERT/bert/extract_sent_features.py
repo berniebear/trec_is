@@ -392,6 +392,7 @@ def main(_):
       output_json = collections.OrderedDict()
       output_json["linex_index"] = unique_id
       layer2sum_vector = collections.OrderedDict({layer_index: None for layer_index in layer_indexes})
+      layer2cls_vector = collections.OrderedDict({layer_index: None for layer_index in layer_indexes})
       for (i, token) in enumerate(feature.tokens):
         for (j, layer_index) in enumerate(layer_indexes):
           layer_output = result["layer_output_%d" % j]
@@ -399,8 +400,11 @@ def main(_):
               layer2sum_vector[layer_index] = [float(x) for x in layer_output[i:(i + 1)].flat]
           else:
               layer2sum_vector[layer_index] = [float(x) + layer2sum_vector[layer_index][ii] for ii, x in enumerate(layer_output[i:(i + 1)].flat)]
+          if token == '[CLS]':
+            layer2cls_vector[layer_index] = [float(x) for x in layer_output[i:(i + 1)].flat]
       layer2sum_vector = {layer_index: [round(x / len(feature.tokens), 6) for x in vector] for layer_index, vector in layer2sum_vector.items()}
       output_json["features"] = layer2sum_vector
+      output_json["CLS_features"] = layer2cls_vector
       writer.write(json.dumps(output_json) + "\n")
 
 

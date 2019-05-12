@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-nohup python -u extract_feature.py \
+python -u extract_feature.py \
   --input_file=../../out/tweets-clean-text.txt \
-  --output_file=../../out/skip-thought-vec.npy \
-  >~/log/Mar27.log 2>&1 &
+  --output_file=../../out/skip-thought-vec.npy
+
+python -u extract_feature.py \
+  --input_file=../../out/tweets-clean-text-2019.txt \
+  --output_file=../../out/skip-thought-vec-2019.npy

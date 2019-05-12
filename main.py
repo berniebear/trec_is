@@ -29,36 +29,41 @@ def main():
 
     # Set the file contains data for training and test
     label_file = os.path.join(args.data_dir, 'ITR-H.types.v2.json')
-    tweet_file_list = [os.path.join(args.data_dir, 'all-tweets.txt')]  # Tweets got by TREC jar API
-    if args.use_tweets_by_API:
-        tweet_file_list = [os.path.join(args.data_dir, '{}-tweets.txt'.format(part)) for part in ['train', 'test']]
+    tweet_file_list = [os.path.join(args.data_dir, 'all-tweets.txt')]
+    tweet_file_list_2019 = [os.path.join(args.data_dir, 'all-tweets-2019.txt')]
     train_file = os.path.join(args.data_dir, 'TRECIS-CTIT-H-Training.json')
-    test_file = os.path.join(args.data_dir, 'TRECIS-CTIT-H-Test.tweetids.tsv')
     test_label_file_list = [os.path.join(args.data_dir, 'TRECIS-2018-TestEvents-Labels', 'assr{}.test'.format(i)) for i in range(1, 7)]
-
-    # As the original files provided by TREC is quite messy, we formalize them into train and test file
     formal_train_file = os.path.join(args.data_dir, '2018-train.txt')
     formal_test_file = os.path.join(args.data_dir, '2018-test.txt')
+    formal_2019_test_file = os.path.join(args.data_dir, '2019-test.txt')
+    tweet_text_out_file = os.path.join(args.out_dir, 'tweets-clean-text.txt')
+    tweet_id_out_file = os.path.join(args.out_dir, 'tweets-id.txt')
+    tweet_text_out_file_2019 = os.path.join(args.out_dir, 'tweets-clean-text-2019.txt')
+    tweet_id_out_file_2019 = os.path.join(args.out_dir, 'tweets-id-2019.txt')
+
+    # As the original files provided by TREC is quite messy, we formalize them into train and test file
     utils.formalize_train_file(train_file, formal_train_file)
     utils.formalize_test_file(test_label_file_list, formal_test_file)
+    utils.formalize_2019_test_file('download_tweets', formal_2019_test_file)
     if args.cross_validate:
         formal_merge_file = os.path.join(args.data_dir, '2018-all.txt')
         utils.merge_files([formal_train_file, formal_test_file], formal_merge_file)
         formal_train_file = formal_merge_file
         logger.info("Use cross-validation, the train file has been setting to {}".format(formal_train_file))
 
-    # Files for external feature extraction (such as skip-thought and BERT)
-    args.tweet_text_out_file = os.path.join(args.out_dir, 'tweets-clean-text.txt')
-    args.tweet_id_out_file = os.path.join(args.out_dir, 'tweets-id.txt')
-
     # Step1. Preprocess and extract features for all tweets
     label2id, majority_label, short2long_label = utils.get_label2id(label_file, formal_train_file, args.cv_num)
     id2label = utils.get_id2label(label2id)
     tweetid_list, tweet_content_list = utils.get_tweetid_content(tweet_file_list)
-    if not (os.path.isfile(args.tweet_text_out_file) and os.path.isfile(args.tweet_id_out_file)):
-        utils.write_tweet_and_ids(tweetid_list, tweet_content_list, args.tweet_text_out_file, args.tweet_id_out_file)
-    preprocess = Preprocess(args, tweetid_list, tweet_content_list, label2id)
+    utils.write_tweet_and_ids(tweetid_list, tweet_content_list, tweet_text_out_file, tweet_id_out_file)
+    tweetid_list_2019, tweet_content_list_2019 = utils.get_tweetid_content(tweet_file_list_2019)
+    utils.write_tweet_and_ids(tweetid_list_2019, tweet_content_list_2019, tweet_text_out_file_2019,
+                              tweet_id_out_file_2019)
+    preprocess = Preprocess(args, tweetid_list, tweet_content_list, label2id, tweet_id_out_file)
     preprocess.extract_features()
+    preprocess_2019 = Preprocess(args, tweetid_list_2019, tweet_content_list_2019, label2id,
+                                 tweet_id_out_file_2019, test=True)
+    preprocess_2019.extract_features()
 
     # Step2. Train and Cross-validation
     data_x, data_y = preprocess.extract_train_data(formal_train_file)
@@ -81,14 +86,11 @@ def main():
 
     if args.predict_mode:
         # Step3. Get the 2019 test data, and retrain the model on all training data, then predict on the 2019-test
-        # Todo: Generate the formalized file after 2019-test data released
-        # Todo: After 2019-test data released, add it to tweet_file_list to make sure those tweets have features
         # Todo: Convert label to the new long-label for 2019 setting
-        # Todo: Use the required format for writing final result in utils.ensemble_predict
-        # Todo: Submit one file of multi-classification, which means can use .fit() instead of argmax(.predict_proba,-1)
-        formal_2019_test_file = os.path.join(args.data_dir, '2019-test.txt')
+        # Todo: Submit one file of multi-classification, which means use .predict() instead of argmax(.predict_proba,-1)
+        # Todo: Calculate the "priority score" for each label (using the avg score from training data)
         if args.event_wise:
-            test_x, event2idx_list, line_num = preprocess.extract_formalized_test_data(formal_2019_test_file)
+            test_x, event2idx_list, line_num = preprocess_2019.extract_formalized_test_data(formal_2019_test_file)
             test_predict_collect = [0] * line_num
             for event_type in utils.idx2event_type:
                 it_data_x, it_data_y, it_test_x = data_x[event_type], data_y[event_type], test_x[event_type]
@@ -114,8 +116,7 @@ def main():
     if args.ensemble is not None:
         # Step4. Do the ensemble of different model
         if args.event_wise:
-            out_file = os.path.join(args.out_dir, 'ensemble_event_out.txt')
-            raise NotImplementedError
+            raise NotImplementedError("We don't want to ensemble for event-wise models")
         else:
             out_file = os.path.join(args.out_dir, 'ensemble_out.txt')
             dev_label_file = os.path.join(args.ensemble_dir, 'dev_label.txt')

@@ -41,7 +41,14 @@ event2type = {'costaRicaEarthquake2012': 'earthquake',
               'typhoonHagupit2014': 'typhoon',
               'nepalEarthquake2015': 'earthquake',
               'flSchoolShooting2018': 'shooting',
-              'parisAttacks2015': 'boombing'}
+              'parisAttacks2015': 'boombing',  # The following seven lines is for 2019-A
+              'floodChoco2019': 'flood',
+              'fireAndover2019': 'wildfire',
+              'earthquakeCalifornia2014': 'earthquake',
+              'earthquakeBohol2013': 'earthquake',
+              'hurricaneFlorence2018': 'typhoon',
+              'shootingDallas2017': 'shooting',
+              'fireYMM2016': 'wildfire'}
 assert len(set(event2type.values())) == 6
 
 
@@ -284,6 +291,33 @@ def formalize_test_file(origin_test_files: List[str], formalized_test_file: str)
     fout.close()
 
 
+def formalize_2019_test_file(data_folder: str, formalized_file: str):
+    """
+    As the 2019-A test data downloaded by official jar are some separate files, so we need to collect them together
+    Notice that we don't know the label and priority of the test data, we use UNK to replace it.
+    The 2019-A test data has already been ranked by time, so we just need to read line by line
+    :param data_folder:
+    :param formalized_file:
+    :return:
+    """
+    fout = open(formalized_file, 'w', encoding='utf8')
+    filename_list = []
+    for filename in os.listdir(data_folder):
+        if filename.startswith("trecis2019-A-test") and filename.endswith(".json"):
+            filename_list.append(filename)
+    filename_list = sorted(filename_list)
+
+    for filename in filename_list:
+        eventid = filename.split('.')[1]
+        event_type = event2type[eventid]
+        with open(os.path.join(data_folder, filename), 'r', encoding='utf8') as f:
+            for line in f:
+                content = json.loads(line)
+                tweetid = content["allProperties"]["id"]
+                fout.write('{0}\tUNK\tUNK\t{1}\n'.format(tweetid, event_type))
+    fout.close()
+
+
 def formalize_helper(filename, fout):
     with open(filename, 'r', encoding='utf8') as f:
         train_file_content = json.load(f)
@@ -325,7 +359,7 @@ def write_tweet_and_ids(tweetid_list: List[str], tweet_content_list: List[dict],
     :return:
     """
     clean_texts = []
-    for content in tweet_content_list:
+    for i, content in enumerate(tweet_content_list):
         entities = content['entities']
         clean_text = get_clean_tweet(content['full_text'], entities)
         clean_texts.append(clean_text)
@@ -339,7 +373,7 @@ def get_label2id(label_file: str, train_file: str, threshold: int):
     Because the original labels are in the form of text, such as "MultimediaShare" and so on
     We want to convert those textual labels to digital labels
     :param label_file: All types of labels provided by TREC, including explanation of each type of label
-    :param train_file: Formalized train file, where each line is in the form of "{tweetid}\t{labels}\t{Priority}\n"
+    :param train_file: Formalized train file, where each line is "{tweetid}\t{labels}\t{Priority}\t{EventType}\n"
     :param threshold:
     :return:
         label2id: the dict to convert labels to id
@@ -385,6 +419,8 @@ def get_label2id(label_file: str, train_file: str, threshold: int):
         else:
             label2id[label] = len(label2id)
     print_to_log("With threshold {0}, those labels are filtered out: {1}".format(threshold, removed_labels))
+    assert len(removed_labels) == 0, "In our current setting, there should be no label removed"
+
     return label2id, majority_label, short2long_label
 
 
@@ -611,27 +647,30 @@ def extract_feature_by_dict(tweetid_list: List[str], tweetid2vec: Dict[str, List
     return np.asarray(res)
 
 
-def get_tweetid2vec(tweetid_file: str, vec_dir: str, feat_name: str) -> Dict[str, List[float]]:
+def get_tweetid2vec(tweetid_file: str, vec_dir: str, feat_name: str, vecfile_postfix) -> Dict[str, List[float]]:
     """
-    The file of tweets content is args.tweet_text_out_file
-    The file of corresponding feature vector (such as bert or skip-thought) is vec_file
+    The file of tweets content is tweet_text_out_file
     The file of tweets id is tweetid_file
+    Notice the order of the tweet id and tweet content is consistent for those two files
     :param tweetid_file:
-    :param vec_dir: directory that contains vec file
+    :param vec_dir: The folder contains corresponding feature vector (such as bert or skip-thought)
     :param feat_name:
+    :param vecfile_postfix: to distinguish the 2019 vector file with the 2018 original vector file
     :return:
     """
-    if feat_name == 'bert':
-        vec_file = os.path.join(vec_dir, 'bert-vec.json')
-        return get_tweetid2bertvec(tweetid_file, vec_file)
+    if feat_name.startswith('bert'):
+        vec_file = os.path.join(vec_dir, 'bert-vec{}.json'.format(vecfile_postfix))
+        _, bert_type, layer = feat_name.split('-')  # bert-CLS-1 means using -1 layer of CLS feature
+        return get_tweetid2bertvec(tweetid_file, vec_file, bert_type, layer)
     else:
-        vec_file = os.path.join(vec_dir, '{}-vec.npy'.format(feat_name))
+        vec_file = os.path.join(vec_dir, '{0}-vec{1}.npy'.format(feat_name, vecfile_postfix))
         return get_tweetid2vec_by_npy(tweetid_file, vec_file)
 
 
-def get_tweetid2bertvec(tweetid_file: str, bert_vec_file: str) -> Dict[str, List[float]]:
+def get_tweetid2bertvec(tweetid_file: str, bert_vec_file: str, bert_type: str, layer: str) -> Dict[str, List[float]]:
     tweetid2bertvec = dict()
     tweetid_list = []
+    feat_keyword = 'CLS_features' if bert_type == 'CLS' else 'features'
     with open(tweetid_file, 'r', encoding='utf8') as f:
         for i, line in enumerate(f):
             tweetid = line.strip()
@@ -639,7 +678,7 @@ def get_tweetid2bertvec(tweetid_file: str, bert_vec_file: str) -> Dict[str, List
     with open(bert_vec_file, 'r', encoding='utf8') as f:
         for i, line in enumerate(f):
             content = json.loads(line.strip())
-            bertvec = content['features']['-1']
+            bertvec = content[feat_keyword]['-{}'.format(layer)]
             tweetid2bertvec[tweetid_list[i]] = bertvec
     return tweetid2bertvec
 
@@ -709,8 +748,16 @@ def extract_hand_crafted_feature(content_list: list) -> (np.ndarray, List[str]):
                           'num_chars_total', 'num_terms', 'num_words', 'num_unique_terms', 'caps_count', 'caps_ratio',
                           'has_place', 'is_verified']:
             current_feature.append(feat_name2val[feat_name])
+        # Some other features added after reviewing attributes in tweets and users
+        # current_feature.append(content['user']['favourites_count'])
+        # current_feature.append(content['user']['followers_count'])
+        # current_feature.append(content['user']['statuses_count'])
+        # current_feature.append(content['user']['geo_enabled'])
+        # current_feature.append(content['user']['listed_count'])
+        # current_feature.append(content['user']['friends_count'])
 
         feature_list.append(current_feature)
+
     feature_list = np.asarray(feature_list, dtype=np.float32)
     return feature_list, clean_text_list
 

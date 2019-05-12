@@ -208,10 +208,11 @@ def main():
     fasttext_feature_tfidf = extract_by_fasttext(clean_texts, fasttext_vectorizer, analyzer,
                                                  tfidf_feature, tfidf_vectorizer.get_feature_names(), 'weighted')
 
-    np.save(os.path.join(args.output_dir, 'glove-avg-vec.npy'), glove_feature_avg)
-    np.save(os.path.join(args.output_dir, 'glove-tfidf-vec.npy'), glove_feature_tfidf)
-    np.save(os.path.join(args.output_dir, 'fasttext-avg-vec.npy'), fasttext_feature_avg)
-    np.save(os.path.join(args.output_dir, 'fasttext-tfidf-vec.npy'), fasttext_feature_tfidf)
+    postfix = "-2019" if args.input_file.endswith("2019.txt") else ""
+    np.save(os.path.join(args.output_dir, 'glove-avg-vec{}.npy'.format(postfix)), glove_feature_avg)
+    np.save(os.path.join(args.output_dir, 'glove-tfidf-vec{}.npy'.format(postfix)), glove_feature_tfidf)
+    np.save(os.path.join(args.output_dir, 'fasttext-avg-vec{}.npy'.format(postfix)), fasttext_feature_avg)
+    np.save(os.path.join(args.output_dir, 'fasttext-tfidf-vec{}.npy'.format(postfix)), fasttext_feature_tfidf)
     print("The feature vectors has been written to {}".format(args.output_dir))
 
 
