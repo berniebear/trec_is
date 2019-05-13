@@ -112,6 +112,45 @@ def check_args_conflict(args):
         assert args.late_fusion is False, "Currently our predict model only supports early-fusion"
         assert args.search_best_parameters is False
         assert args.train_on_small is False
+    if args.search_best_parameters:
+        assert args.event_wise is False, "Current model doesn't support search best parameter for event-wise model" \
+                                         "We recommend to search parameter for general model and direct apply event-wise"
+
+
+def write_predict_and_label(args, formal_train_file: str, label2id: Dict[str, int], data_predict_collect: np.ndarray):
+    """
+    For each call of this function, we will write the dev labels (multiple labels per line)
+        and dev predict (the probability score per line) to the file.
+    :return:
+    """
+    dev_label_file = os.path.join(args.ensemble_dir, 'dev_label.txt')
+    dev_predict_file = os.path.join(args.ensemble_dir, 'dev_predict_{0}{1}.txt'.format(
+        args.model, '-event' if args.event_wise else ''))
+
+    # Write the dev label file according to formal_train_file
+    fout = open(dev_label_file, 'w', encoding='utf8')
+    with open(formal_train_file, 'r', encoding='utf8') as f:
+        for line in f:
+            label_list = line.strip().split('\t')[1].split(',')
+            label_id_list = [label2id[label] for label in label_list]
+            fout.write('{}\n'.format(' '.join(list(map(str, label_id_list)))))
+    fout.close()
+
+    with open(dev_predict_file, 'w', encoding='utf8') as f:
+        for row in data_predict_collect:
+            f.write('{}\n'.format(' '.join(list(map(str, row)))))
+
+    print("The dev labels has been written to {0} and predict has been written to {1}".format(
+        dev_label_file, dev_predict_file))
+
+
+def write_predict_res_to_file(args, test_predict_collect):
+    test_predict_file = os.path.join(args.ensemble_dir, 'test_predict_{0}{1}.txt'.format(
+        args.model, '-event' if args.event_wise else ''))
+    with open(test_predict_file, 'w', encoding="utf8") as f:
+        for row in test_predict_collect:
+            f.write('{}\n'.format(' '.join(list(map(str, row)))))
+    print("The test predict has been written to {0}".format(test_predict_file))
 
 
 def get_predict_file_list(ensemble_dir, prefix):
@@ -749,12 +788,12 @@ def extract_hand_crafted_feature(content_list: list) -> (np.ndarray, List[str]):
                           'has_place', 'is_verified']:
             current_feature.append(feat_name2val[feat_name])
         # Some other features added after reviewing attributes in tweets and users
-        # current_feature.append(content['user']['favourites_count'])
-        # current_feature.append(content['user']['followers_count'])
-        # current_feature.append(content['user']['statuses_count'])
-        # current_feature.append(content['user']['geo_enabled'])
-        # current_feature.append(content['user']['listed_count'])
-        # current_feature.append(content['user']['friends_count'])
+        current_feature.append(content['user']['favourites_count'])
+        current_feature.append(content['user']['followers_count'])
+        current_feature.append(content['user']['statuses_count'])
+        current_feature.append(content['user']['geo_enabled'])
+        current_feature.append(content['user']['listed_count'])
+        current_feature.append(content['user']['friends_count'])
 
         feature_list.append(current_feature)
 

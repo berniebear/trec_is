@@ -35,6 +35,8 @@ def get_arguments():
     parser.add_argument("--ensemble", type=str, default=None,
                         help="After running all models with --predict_mode, you can run with it to ensemble all models"
                              "Can choose from voting | svm_linear | svm_rbf | logistic_reg")
+    parser.add_argument("--force_retrain", action="store_true",
+                        help="force to retrain the model on 2018 data")
     # Data path
     parser.add_argument("--out_dir", type=str, default='out',
                         help="Directory contains the output things, including the log and ckpt")

@@ -94,13 +94,51 @@ class Preprocess(object):
             self.tweetid2feature[tweetid] = whole_feature_matrix[i]
 
     def extract_train_data(self, train_file):
-        return self._extract_data_from_formalized_file(train_file)
+        return self._extract_data_from_formalized_file_v2(train_file)
 
-    def _extract_data_from_formalized_file(self, filename: str):
+    def _extract_data_from_formalized_file_v2(self, filename: str):
         """
+        For the new data released in 2019, there is no tweets missed, so we don't need to care about missing tweets
+            If you want to deal with missing tweets, please refer to `_extract_data_from_formalized_file_v1`
         Extract data in the form of multi-label, where we treat each "tweet" as a training instance, and the label is
             recorded as a list (such as data_x = [tweetid_1_feature, tweetid_2_feature], data_y = [[0, 2, 5], [1, 5]])
         Notice that if event_wise is True, we store data_x and data_y for each event separately
+        :param filename:
+        :return:
+        """
+        if self.args.event_wise:
+            data_x = {event_type: [] for event_type in utils.idx2event_type}
+            data_y = {event_type: [] for event_type in utils.idx2event_type}
+            event2idx_list = {event_type: [] for event_type in utils.idx2event_type}
+        else:
+            data_x, data_y = [], []
+
+        with open(filename, 'r', encoding='utf8') as f:
+            for idx, line in enumerate(f):
+                line = line.strip().split('\t')
+                tweetid = line[0]
+                event_type = line[3]
+                categories = [self.label2id[label] for label in line[1].split(',')]
+                feature = self.tweetid2feature[tweetid]
+                if self.args.event_wise:
+                    data_x[event_type].append(feature)
+                    data_y[event_type].append(categories)
+                    event2idx_list[event_type].append(idx)
+                else:
+                    data_x.append(feature)
+                    data_y.append(categories)
+
+        if self.args.event_wise:
+            for event_type in utils.idx2event_type:
+                data_x[event_type] = np.asarray(data_x[event_type])
+                data_y[event_type] = np.asarray(data_y[event_type])
+            return data_x, data_y, event2idx_list, idx + 1
+        else:
+            return np.asarray(data_x), np.asarray(data_y)
+
+    def _extract_data_from_formalized_file_v1(self, filename: str):
+        """
+        This function is deprecated
         :param filename:
         :return:
         """
@@ -110,11 +148,12 @@ class Preprocess(object):
         if self.args.event_wise:
             data_x = {event_type: [] for event_type in utils.idx2event_type}
             data_y = {event_type: [] for event_type in utils.idx2event_type}
+            event2idx_list = {event_type: [] for event_type in utils.idx2event_type}
         else:
             data_x, data_y = [], []
 
         with open(filename, 'r', encoding='utf8') as f:
-            for line in f:
+            for idx, line in enumerate(f):
                 line = line.strip().split('\t')
                 tweetid = line[0]
                 event_type = line[3]
@@ -128,6 +167,7 @@ class Preprocess(object):
                     if self.args.event_wise:
                         data_x[event_type].append(feature)
                         data_y[event_type].append(categories)
+                        event2idx_list[event_type].append(idx)
                     else:
                         data_x.append(feature)
                         data_y.append(categories)
@@ -139,10 +179,9 @@ class Preprocess(object):
             for event_type in utils.idx2event_type:
                 data_x[event_type] = np.asarray(data_x[event_type])
                 data_y[event_type] = np.asarray(data_y[event_type])
+            return data_x, data_y, event2idx_list, idx + 1
         else:
-            data_x, data_y = np.asarray(data_x), np.asarray(data_y)
-
-        return data_x, data_y
+            return np.asarray(data_x), np.asarray(data_y)
 
     def extract_formalized_test_data(self, test_file: str):
         """
@@ -151,7 +190,8 @@ class Preprocess(object):
         Another thing worth to mention is we don't check if the tweet is in self.tweetid2feature, because
             we assume all tweets provided as 2019-test data should have its content also provided
         :param test_file:
-        :return:
+        :return: If event-wise, we need to return the idx_list for each event,
+                    as well as the number of lines in the file
         """
         if self.args.event_wise:
             data_x = {event_type: [] for event_type in utils.idx2event_type}
@@ -218,7 +258,7 @@ class Preprocess(object):
         :param test_file:
         :return:
         """
-        return self._extract_data_from_formalized_file(test_file)
+        return self._extract_data_from_formalized_file_v1(test_file)
 
     def extract_test_data(self, test_file: str):
         """

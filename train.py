@@ -4,6 +4,7 @@ from scipy import stats
 import numpy as np
 import pandas as pd
 import scipy
+import pickle
 from sklearn.model_selection import KFold, RandomizedSearchCV, ParameterSampler, GridSearchCV, ParameterGrid
 from sklearn.linear_model import SGDClassifier
 from sklearn.svm import SVC, LinearSVC
@@ -42,7 +43,7 @@ class Train(object):
         self.data_y = data_y
         self.id2label = id2label
         self.feature_lens = feature_lens
-        self.metric_names = ['accuracy', 'precision', 'recall', 'f1']
+        self.metric_names: List[str] = ['accuracy', 'precision', 'recall', 'f1']
         self.clf: List[OneVsRestClassifier] = None
         self.event_type = event_type
 
@@ -53,9 +54,18 @@ class Train(object):
         Now we have determined the parameter, and we want to train on all data we have (self.data_x and self.data_y)
         :return:
         """
-        self._create_model()
-        self._binarize_data_y()
-        self._fit_data(self.data_x, self.data_y)
+        custom_postfix = '_{}'.format(self.event_type) if self.event_type is not None else ''
+        model_save_name = '{0}_{1}.pkl'.format(self.args.model, custom_postfix)
+        ckpt_file = os.path.join(self.args.model_dir, model_save_name)
+        if os.path.isfile(ckpt_file) and not self.args.force_retrain:
+            with open(ckpt_file, 'rb') as f:
+                self.clf = pickle.load(f)
+        else:
+            self._create_model()
+            self._binarize_data_y()
+            self._fit_data(self.data_x, self.data_y)
+            with open(ckpt_file, 'wb') as f:
+                pickle.dump(self.clf, f)
 
     def _fit_data(self, data_x, data_y):
         start_idx = 0
@@ -396,7 +406,7 @@ class Train(object):
             index_list = utils.get_k_fold_index_list(self.data_y, self.id2label, self.args.cv_num)
         else:
             # StratifiedKFold doesn't support multi-label setting, so we can only use KFold
-            kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
+            kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed, shuffle=True)
             index_list = kf.split(self.data_x, self.data_y)
 
         return index_list
@@ -432,8 +442,6 @@ class Train(object):
 
     def _cross_validate(self):
         """
-        Don't worry about stratified K-fold, because for cross_validate,
-            if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used
         If we are performing event-wise training, we need to return the metrics for each running (event)
         Note: If you want to get more balanced k-fold split, you can refer to `proba_mass_split` in utils.py,
             or the `stratify_split` in utils.py which is implemented based on Sechidis et. al paper
@@ -454,87 +462,28 @@ class Train(object):
             metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
             for metric_name in self.metric_names:
                 metric_values[metric_name].append([metric_results[metric_name], len(y_test)])
-
-            if self.args.predict_mode:
-                predict_score = self.clf[0].predict_proba(X_test)
-                dev_predict[test_idx_list] = predict_score
-
-        if self.args.predict_mode:
-            custom_postfix = '_{}'.format(self.event_type) if self.args.event_wise else ''
-            self._write_predict_and_label(self.mlb.inverse_transform(self.data_y), dev_predict, custom_postfix)
+            predict_score = self.clf[0].predict_proba(X_test)
+            dev_predict[test_idx_list] = predict_score
 
         metric_weighted_avg = self._get_weighted_avg(metric_values)
         for metric_name in self.metric_names:
             print_to_log('The {0} score in cross validation is {1}'.format(metric_name, metric_values[metric_name]))
             print_to_log('The average {0} score is {1}'.format(metric_name, metric_weighted_avg[metric_name]))
 
-        if self.args.event_wise:
-            return {metric_name: metric_weighted_avg[metric_name] for metric_name in self.metric_names}
-        elif self.args.search_best_parameters:
+        if self.args.search_best_parameters:
             return metric_weighted_avg['f1']
+
+        return {metric_name: metric_weighted_avg[metric_name] for metric_name in self.metric_names}, dev_predict
 
     def _get_weighted_avg(self, metric_values):
         return utils.get_weighted_avg(metric_values, self.metric_names)
 
-    def _write_predict_and_label(self, dev_label: List[set], dev_predict: np.ndarray, custom_postfix: str):
-        """
-        For each call of this function, we will write the dev labels (multiple labels per line)
-            and dev predict (the probability score per line) to the file.
-        Notice that in most situation the random seed could guarantee the order of labels for each run is consistent,
-            but just in case some weird situations, I check the order each time if the dev label file already exists
-        :param dev_label:
-        :param dev_predict:
-        :param custom_postfix: Used for some situations we want to add postfix to distinguish different settings for
-                                the same model
-        :return:
-        """
-        dev_label_file = os.path.join(self.args.ensemble_dir, 'dev_label{0}.txt'.format(custom_postfix))
-        dev_predict_file = os.path.join(self.args.ensemble_dir, 'dev_predict_{0}{1}.txt'.format(
-            self.args.model, custom_postfix))
-
-        if os.path.isfile(dev_label_file):
-            # If the file already exists, use first n rows to make sure the label order is consistent
-            nums_to_check = 20
-            check_list = []
-            with open(dev_label_file, 'r', encoding='utf8') as f:
-                for i, line in enumerate(f):
-                    if i >= nums_to_check:
-                        break
-                    check_list.append(list(map(int, line.strip().split())))
-            for i, it_check in enumerate(check_list):
-                current_label = dev_label[i]
-                assert set(it_check) == set(current_label), \
-                    "Fatal Error! The order is inconsistent for {}!".format(dev_label_file)
-        else:
-            with open(dev_label_file, 'w', encoding='utf8') as f:
-                for label in dev_label:
-                    label_list = sorted(list(map(str, label)))
-                    f.write('{}\n'.format(' '.join(label_list)))
-
-        with open(dev_predict_file, 'w', encoding='utf8') as f:
-            for row in dev_predict:
-                f.write('{}\n'.format(' '.join(list(map(str, row)))))
-
-        print("The dev labels has been written to {0} and predict has been written to {1}".format(
-            dev_label_file, dev_predict_file))
-
     def predict_on_test(self, test_data: np.ndarray):
         """
         For ensemble purpose, each model predict on test data
-        Notice that for the event-wise model, we need to merge all predictions into a list to keep the original order
+        Notice that for the event-wise model, we need to merge all predictions into a list to keep the original order,
+            which has been done in main.py
         :param test_data:
         :return:
         """
-        custom_postfix = '_{}'.format(self.event_type) if self.args.event_wise else ''
-        test_predict_file = os.path.join(self.args.ensemble_dir, 'test_predict_{0}{1}.txt'.format(
-            self.args.model, custom_postfix))
-        predict_score = self.clf[0].predict_proba(test_data)
-
-        if self.args.event_wise:
-            return predict_score
-
-        with open(test_predict_file, 'w', encoding='utf8') as f:
-            for row in predict_score:
-                f.write('{}\n'.format(' '.join(list(map(str, row)))))
-
-        print("The test predict has been written to {0}".format(test_predict_file))
+        return self.clf[0].predict_proba(test_data)

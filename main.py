@@ -20,7 +20,7 @@ def main():
     # Create folders and set logging format
     args.model_dir = os.path.join(args.out_dir, 'ckpt')
     args.log_dir = os.path.join(args.out_dir, 'log')
-    args.ensemble_dir = os.path.join(args.out_dir, 'ensemble_event' if args.event_wise else 'ensemble')
+    args.ensemble_dir = os.path.join(args.out_dir, 'ensemble')
     prepare_folders(args)
     logger = set_logging(args)
     logger.info("Here is the arguments of this running:")
@@ -66,23 +66,29 @@ def main():
     preprocess_2019.extract_features()
 
     # Step2. Train and Cross-validation
-    data_x, data_y = preprocess.extract_train_data(formal_train_file)
     if args.event_wise:
+        data_x, data_y, event2idx_list, line_num = preprocess.extract_train_data(formal_train_file)
+        data_predict_collect = np.zeros([line_num, len(label2id)])
         metrics_collect = []
         metric_names = None
         for event_type in utils.idx2event_type:
             it_data_x, it_data_y = data_x[event_type], data_y[event_type]
             train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len, event_type)
-            train.shuffle_data()
-            metrics = train.train()
+            # train.shuffle_data()  # We set shuffle=True in KFold, so no need to shuffle data here
+            metrics, predict_score = train.train()
+            for i, idx in enumerate(event2idx_list[event_type]):
+                data_predict_collect[idx] = predict_score[i]
             metrics_collect.append((metrics, it_data_x.shape[0]))
             if metric_names is None:
                 metric_names = train.metric_names
         utils.get_final_metrics(metrics_collect, metric_names)
     else:
+        data_x, data_y = preprocess.extract_train_data(formal_train_file)
         train = Train(args, data_x, data_y, id2label, preprocess.feature_len)
-        train.shuffle_data()
-        train.train()
+        # train.shuffle_data()
+        _, data_predict_collect = train.train()
+    if args.predict_mode:
+        utils.write_predict_and_label(args, formal_train_file, label2id, data_predict_collect)
 
     if args.predict_mode:
         # Step3. Get the 2019 test data, and retrain the model on all training data, then predict on the 2019-test
@@ -91,27 +97,23 @@ def main():
         # Todo: Calculate the "priority score" for each label (using the avg score from training data)
         if args.event_wise:
             test_x, event2idx_list, line_num = preprocess_2019.extract_formalized_test_data(formal_2019_test_file)
-            test_predict_collect = [0] * line_num
+            test_predict_collect = np.zeros([line_num, len(label2id)])
             for event_type in utils.idx2event_type:
                 it_data_x, it_data_y, it_test_x = data_x[event_type], data_y[event_type], test_x[event_type]
                 if len(it_test_x) == 0:
-                    print("There are no event belongs to {} for the test data".format(event_type))
+                    print("[WARNING] There are no event belongs to {} for the test data".format(event_type))
                     continue
-                train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len, event_type)
+                train = Train(args, it_data_x, it_data_y, id2label, preprocess_2019.feature_len, event_type)
                 train.train_on_all()
                 predict_score = train.predict_on_test(it_test_x)
-                for i, idx in event2idx_list[event_type]:
+                for i, idx in enumerate(event2idx_list[event_type]):
                     test_predict_collect[idx] = predict_score[i]
-            test_predict_file = os.path.join(args.ensemble_dir, 'test_predict_{0}.txt'.format(args.model))
-            with open(test_predict_file, 'w', encoding="utf8") as f:
-                for row in test_predict_collect:
-                    f.write('{}\n'.format(' '.join(list(map(str, row)))))
-            print("The test predict has been written to {0}".format(test_predict_file))
         else:
-            test_x = preprocess.extract_formalized_test_data(formal_2019_test_file)
-            train = Train(args, data_x, data_y, id2label, preprocess.feature_len)
+            test_x = preprocess_2019.extract_formalized_test_data(formal_2019_test_file)
+            train = Train(args, data_x, data_y, id2label, preprocess_2019.feature_len)
             train.train_on_all()
-            train.predict_on_test(test_x)
+            test_predict_collect = train.predict_on_test(test_x)
+        utils.write_predict_res_to_file(args, test_predict_collect)
 
     if args.ensemble is not None:
         # Step4. Do the ensemble of different model
@@ -134,14 +136,6 @@ def main():
                 for it_predict in predict:
                     f.write("{}\n".format(it_predict))
             print("The ensemble result has been written to {}".format(out_file))
-
-    # The old predict script for evaluation on 2018-test data
-    # predict_file = os.path.join(args.out_dir, "predict.txt")
-    # test_data_x, test_tweetid_list, tweetid2idx, tweetid2incident = preprocess.extract_test_data(test_file)
-    # train.predict(test_data_x, test_tweetid_list, tweetid2idx, tweetid2incident,
-    #               id2label, short2long_label, majority_label, predict_file)
-    # utils.gzip_compress_file(predict_file)
-    # evaluate(test_label_file_list, predict_file + ".gz", label_file, args.out_dir)
 
 
 if __name__ == '__main__':
