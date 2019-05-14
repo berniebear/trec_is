@@ -4,6 +4,7 @@ import logging
 import json
 from typing import List, Dict
 import numpy as np
+import pickle
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC, SVC
 from sklearn.preprocessing import MultiLabelBinarizer
@@ -115,6 +116,12 @@ def check_args_conflict(args):
     if args.search_best_parameters:
         assert args.event_wise is False, "Current model doesn't support search best parameter for event-wise model" \
                                          "We recommend to search parameter for general model and direct apply event-wise"
+
+
+def save_variable_to_file(variables_dict: Dict, target_filename):
+    with open(target_filename, 'wb') as f:
+        pickle.dump(variables_dict, f)
+    print("Those variables have been saved to {1}: {0}".format(variables_dict.keys(), target_filename))
 
 
 def write_predict_and_label(args, formal_train_file: str, label2id: Dict[str, int], data_predict_collect: np.ndarray):
@@ -330,6 +337,15 @@ def formalize_test_file(origin_test_files: List[str], formalized_test_file: str)
     fout.close()
 
 
+def get_2019_json_file_list(data_folder: str):
+    filename_list = []
+    for filename in os.listdir(data_folder):
+        if filename.startswith("trecis2019-A-test") and filename.endswith(".json"):
+            filename_list.append(filename)
+    filename_list = sorted(filename_list)
+    return filename_list
+
+
 def formalize_2019_test_file(data_folder: str, formalized_file: str):
     """
     As the 2019-A test data downloaded by official jar are some separate files, so we need to collect them together
@@ -339,13 +355,8 @@ def formalize_2019_test_file(data_folder: str, formalized_file: str):
     :param formalized_file:
     :return:
     """
+    filename_list = get_2019_json_file_list(data_folder)
     fout = open(formalized_file, 'w', encoding='utf8')
-    filename_list = []
-    for filename in os.listdir(data_folder):
-        if filename.startswith("trecis2019-A-test") and filename.endswith(".json"):
-            filename_list.append(filename)
-    filename_list = sorted(filename_list)
-
     for filename in filename_list:
         eventid = filename.split('.')[1]
         event_type = event2type[eventid]

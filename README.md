@@ -25,6 +25,13 @@ Please refer to `options.py` to get more info about different parameters.
 To test the correctness of parameter search part, we can set `--search_best_parameters --random_search_n_iter 1` 
 and set the parameter in `_random_search_best_para()` to be identical with the previous used parameter.
 
+**Important**: After you run a model with `--cross_validate`, you can then run the script again with `--get_submission` to get the file that can be submitted.
+For example
+```bash
+python main.py --model rf --cross_validate --get_submission
+```
+The default method is to pick top 2 for each prediction. You can change it according to the paramters shown in `options.py` (under the comment `# For final submission`)
+
 ## Task Description
 
 ### [Important] Change in 2019 compared with 2018

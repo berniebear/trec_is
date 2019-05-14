@@ -7,7 +7,7 @@ import numpy as np
 from options import get_arguments
 from preprocess import Preprocess
 from train import Train
-from evaluate import evaluate
+from postprocess import PostProcess
 from utils import set_logging, prepare_folders
 import utils
 
@@ -40,11 +40,12 @@ def main():
     tweet_id_out_file = os.path.join(args.out_dir, 'tweets-id.txt')
     tweet_text_out_file_2019 = os.path.join(args.out_dir, 'tweets-clean-text-2019.txt')
     tweet_id_out_file_2019 = os.path.join(args.out_dir, 'tweets-id-2019.txt')
+    raw_tweets_json_folder = 'download_tweets'
 
     # As the original files provided by TREC is quite messy, we formalize them into train and test file
     utils.formalize_train_file(train_file, formal_train_file)
     utils.formalize_test_file(test_label_file_list, formal_test_file)
-    utils.formalize_2019_test_file('download_tweets', formal_2019_test_file)
+    utils.formalize_2019_test_file(raw_tweets_json_folder, formal_2019_test_file)
     if args.cross_validate:
         formal_merge_file = os.path.join(args.data_dir, '2018-all.txt')
         utils.merge_files([formal_train_file, formal_test_file], formal_merge_file)
@@ -54,6 +55,17 @@ def main():
     # Step1. Preprocess and extract features for all tweets
     label2id, majority_label, short2long_label = utils.get_label2id(label_file, formal_train_file, args.cv_num)
     id2label = utils.get_id2label(label2id)
+    if args.get_submission:
+        postpro = PostProcess(args, label2id, id2label, majority_label, short2long_label,
+                              formal_train_file, formal_2019_test_file, raw_tweets_json_folder)
+        if args.pick_criteria == 'threshold':
+            threshold = postpro.find_best_threshold() if args.pick_threshold is None else args.pick_threshold
+            postpro.pick_by_threshold(threshold)
+        elif args.pick_criteria == 'top':
+            postpro.pick_top_k(args.pick_k)
+        else:
+            raise ValueError("Invalid value {} for args.pick_criteria".format(args.pick_criteria))
+        quit()
     tweetid_list, tweet_content_list = utils.get_tweetid_content(tweet_file_list)
     utils.write_tweet_and_ids(tweetid_list, tweet_content_list, tweet_text_out_file, tweet_id_out_file)
     tweetid_list_2019, tweet_content_list_2019 = utils.get_tweetid_content(tweet_file_list_2019)
@@ -74,7 +86,6 @@ def main():
         for event_type in utils.idx2event_type:
             it_data_x, it_data_y = data_x[event_type], data_y[event_type]
             train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len, event_type)
-            # train.shuffle_data()  # We set shuffle=True in KFold, so no need to shuffle data here
             metrics, predict_score = train.train()
             for i, idx in enumerate(event2idx_list[event_type]):
                 data_predict_collect[idx] = predict_score[i]
@@ -85,16 +96,12 @@ def main():
     else:
         data_x, data_y = preprocess.extract_train_data(formal_train_file)
         train = Train(args, data_x, data_y, id2label, preprocess.feature_len)
-        # train.shuffle_data()
         _, data_predict_collect = train.train()
     if args.predict_mode:
         utils.write_predict_and_label(args, formal_train_file, label2id, data_predict_collect)
 
     if args.predict_mode:
         # Step3. Get the 2019 test data, and retrain the model on all training data, then predict on the 2019-test
-        # Todo: Convert label to the new long-label for 2019 setting
-        # Todo: Submit one file of multi-classification, which means use .predict() instead of argmax(.predict_proba,-1)
-        # Todo: Calculate the "priority score" for each label (using the avg score from training data)
         if args.event_wise:
             test_x, event2idx_list, line_num = preprocess_2019.extract_formalized_test_data(formal_2019_test_file)
             test_predict_collect = np.zeros([line_num, len(label2id)])

@@ -66,4 +66,14 @@ def get_arguments():
                         help="The n-fold cross-validation")
     parser.add_argument("--n_jobs", type=int, default=4,
                         help="Can set to -1 to use all cpu cores")
+    # For final submission
+    parser.add_argument("--get_submission", action="store_true",
+                        help="Generate submission file for TREC-IS")
+    parser.add_argument("--pick_criteria", type=str, default='top',
+                        help='threshold | help, for threshold you can set pick_threshold, and for top you can set')
+    parser.add_argument("--pick_threshold", type=float, default=None,
+                        help='If None, our model will search best threshold')
+    parser.add_argument("--pick_k", type=int, default=2,
+                        help='Pick the top k for each prediction')
+
     return parser.parse_args()
