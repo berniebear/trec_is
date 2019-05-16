@@ -5,8 +5,6 @@ import numpy as np
 
 import utils
 
-priority2score = {'Low': 0.1, 'Medium': 0.3, 'High': 0.6, 'Critical': 1.0}
-
 event2incidentid = {'floodChoco2019': 'TRECIS-CTIT-H-Test-022',
                     'fireAndover2019': 'TRECIS-CTIT-H-Test-023',
                     'earthquakeCalifornia2014': 'TRECIS-CTIT-H-Test-024',
@@ -26,13 +24,14 @@ class PostProcess(object):
     Now we already generate the score prediction by different models, and we can do some post processing,
         which aims to generate the final submission file that can be submitted to TREC-IS 2019
     """
-    def __init__(self, args, label2id: Dict[str, int], id2label: List[str],
+    def __init__(self, args, label2id: Dict[str, int], id2label: List[str], class_weight: List[float],
                  majority_label: str, short2long_label: Dict[str, str],
                  formal_train_file: str, formal_2019_test_file: str,
                  raw_tweets_json_folder: str):
         self.args = args
         self.label2id = label2id
         self.id2label = id2label
+        self.class_weight = class_weight
         self.majority_label = majority_label
         self.short2long_label = short2long_label
         self.formal_train_file = formal_train_file
@@ -40,16 +39,24 @@ class PostProcess(object):
         self.raw_tweets_json_folder = raw_tweets_json_folder
         self.postfix = '-event' if self.args.event_wise else ''
         self.model_name = '{0}{1}'.format(self.args.model, self.postfix)
-        self.submission_file = os.path.join(self.args.out_dir, 'submission_{}'.format(self.model_name))
+        self.submission_folder = self._prepare_submission_folder()
+        self.submission_file = os.path.join(self.submission_folder, 'submission_{}'.format(self.model_name))
         self.dev_label_file = os.path.join(self.args.ensemble_dir, 'dev_label.txt')
         self.dev_predict_file = os.path.join(self.args.ensemble_dir, 'dev_predict_{}.txt'.format(self.model_name))
         self.test_predict_file = os.path.join(self.args.ensemble_dir, 'test_predict_{}.txt'.format(self.model_name))
-        self.class_weight = [1.0 / len(label2id)] * len(label2id)
         self.tweetid2incidentid = self._get_tweetid_to_incidentid()
         self.test_predict = self._read_test_predict()
         self.test_tweetid_list = self._read_test_tweetid()
         self.incidentid_list = sorted(list(event2incidentid.values()))
         assert len(self.test_predict) == len(self.test_tweetid_list)
+
+    def _prepare_submission_folder(self):
+        temp = self.args.pick_k if self.args.pick_criteria == 'top' else self.args.pick_threshold
+        submission_folder = 'submit-{0}-{1}'.format(self.args.pick_criteria, 'None' if temp is None else temp)
+        submission_folder = os.path.join(self.args.out_dir, submission_folder)
+        if not os.path.isdir(submission_folder):
+            os.mkdir(submission_folder)
+        return submission_folder
 
     def _read_test_tweetid(self):
         tweetid_list = []
@@ -137,7 +144,6 @@ class PostProcess(object):
         return tweetid2incidentid
 
     def find_best_threshold(self) -> float:
-        self._get_class_weight()
         self._read_dev_label_predict()
         best_threshold = 0.2
         best_score = 0.0

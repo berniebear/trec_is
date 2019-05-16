@@ -59,9 +59,10 @@ def get_arguments():
                         help="Normalize each feature when reading them from file")
     # Model
     parser.add_argument("--model", type=str, default='bernoulli_nb',
+                        choices=['bernoulli_nb', 'rf', 'sgd_svm', 'svm_linear', 'xgboost'],
                         help="bernoulli_nb | rf | sgd_svm | svm_linear | xgboost")
-    parser.add_argument("--no_class_weight", action='store_true',
-                        help="Not use different weights for each class")
+    parser.add_argument("--class_weight_scheme", type=str, default='balanced', choices=['balanced', 'customize'],
+                        help="balanced | customize, if set to customize, we use the weight calculated by training file")
     parser.add_argument("--cv_num", type=int, default=5,
                         help="The n-fold cross-validation")
     parser.add_argument("--n_jobs", type=int, default=4,
@@ -69,8 +70,8 @@ def get_arguments():
     # For final submission
     parser.add_argument("--get_submission", action="store_true",
                         help="Generate submission file for TREC-IS")
-    parser.add_argument("--pick_criteria", type=str, default='top',
-                        help='threshold | help, for threshold you can set pick_threshold, and for top you can set')
+    parser.add_argument("--pick_criteria", type=str, default='top', choices=['top', 'threshold'],
+                        help='for threshold you can set pick_threshold, and for top you can set pick_k')
     parser.add_argument("--pick_threshold", type=float, default=None,
                         help='If None, our model will search best threshold')
     parser.add_argument("--pick_k", type=int, default=2,

@@ -23,7 +23,8 @@ import utils
 
 
 class Train(object):
-    def __init__(self, args, data_x: np.ndarray, data_y: np.ndarray, id2label: list, feature_lens: List[int],
+    def __init__(self, args, data_x: np.ndarray, data_y: np.ndarray, id2label: list,
+                 feature_lens: List[int], class_weight: List[float],
                  event_type: str=None):
         """
         We use the feature_lens to make the API consistent with or without late fusion.
@@ -36,6 +37,7 @@ class Train(object):
         :param id2label:
         :param feature_lens: Contains lens of features, such as [1024, 256] means the first feature is 1024 dim and the
                 second feature is 256 dim
+        :param class_weight: Weights of each class calculated by `get_class_weight` in utils.py
         :param event_type: used to specify the event for event-wise model
         """
         self.args = args
@@ -43,7 +45,8 @@ class Train(object):
         self.data_y = data_y
         self.id2label = id2label
         self.feature_lens = feature_lens
-        self.metric_names: List[str] = ['accuracy', 'precision', 'recall', 'f1']
+        self.class_weight = class_weight
+        self.metric_names: List[str] = ['accuracy', 'precision', 'recall', 'f1'] if args.class_weight_scheme == 'balanced' else ['weighted_ce']
         self.clf: List[OneVsRestClassifier] = None
         self.event_type = event_type
 
@@ -175,7 +178,13 @@ class Train(object):
         self.clf = [self._create_single_model(param) for i in range(len(self.feature_lens))]
 
     def _create_single_model(self, param=None):
-        class_weight = None if self.args.no_class_weight else 'balanced'
+        if self.args.class_weight_scheme == 'balanced':
+            class_weight = 'balanced'
+        elif self.args.class_weight_scheme == 'customize':
+            class_weight = {i: weight for i, weight in enumerate(self.class_weight)}
+        else:
+            raise ValueError("Invalid value {} for args.class_weight_scheme".format(self.args.class_weight_scheme))
+
         model_name = self.args.model
         print_to_log("The model used here is {0}".format(model_name))
         if model_name == 'sgd_svm':
@@ -348,23 +357,24 @@ class Train(object):
         else:
             param_list = list(ParameterSampler(param_dist, n_iter=n_iter))
 
-        best_f1 = 0.0
+        metric_name = 'f1' if self.args.class_weight_scheme == 'balanced' else 'weighted_ce'
+        best_metric = float("-inf")
         best_param = dict()
         for i, param in enumerate(param_list):
             if i < self.args.search_skip:
                 continue
             print_to_log("Using the parameter set: {}".format(param))
             self._create_model(param)
-            current_f1 = self._cross_validate()
-            if current_f1 > best_f1:
-                best_f1 = current_f1
+            current_metric = self._cross_validate()
+            if current_metric > best_metric:
+                best_metric = current_metric
                 best_param = param
             if (i + 1) % self.args.search_print_interval == 0:
-                print_to_log("After searching {0} sets of parameters, current best is {1}, best F1 is {2}".format(
-                    i + 1, best_param, best_f1))
+                print_to_log("After searching {0} sets of parameters, current best is {1}, best {3} is {2}".format(
+                    i + 1, best_param, best_metric, metric_name))
 
         print_to_log("The Random search finished!")
-        print_to_log("The best f1 is {}".format(best_f1))
+        print_to_log("The best {0} is {1}".format(metric_name, best_metric))
         print_to_log("The best parameter is {}".format(best_param))
         quit()
 
@@ -458,12 +468,17 @@ class Train(object):
             X_test = self.data_x[test_idx_list]
             y_test = self.data_y[test_idx_list]
             self._fit_data(X_train, y_train)
-            y_predict = self._predict_data(X_test)
-            metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
-            for metric_name in self.metric_names:
-                metric_values[metric_name].append([metric_results[metric_name], len(y_test)])
             predict_score = self.clf[0].predict_proba(X_test)
             dev_predict[test_idx_list] = predict_score
+
+            if self.args.class_weight_scheme == 'balanced':
+                y_predict = self._predict_data(X_test)
+                metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
+            else:
+                metric_results = utils.evaluate_weighted_sum(y_test, predict_score, self.class_weight)
+
+            for metric_name in self.metric_names:
+                metric_values[metric_name].append([metric_results[metric_name], len(y_test)])
 
         metric_weighted_avg = self._get_weighted_avg(metric_values)
         for metric_name in self.metric_names:
@@ -471,7 +486,8 @@ class Train(object):
             print_to_log('The average {0} score is {1}'.format(metric_name, metric_weighted_avg[metric_name]))
 
         if self.args.search_best_parameters:
-            return metric_weighted_avg['f1']
+            target_metric = 'f1' if self.args.class_weight_scheme == 'balanced' else 'weighted_ce'
+            return metric_weighted_avg[target_metric]
 
         return {metric_name: metric_weighted_avg[metric_name] for metric_name in self.metric_names}, dev_predict
 

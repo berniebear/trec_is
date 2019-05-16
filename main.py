@@ -18,9 +18,9 @@ def main():
     np.random.seed(args.random_seed)  # sklearn use np to generate random value
 
     # Create folders and set logging format
-    args.model_dir = os.path.join(args.out_dir, 'ckpt')
+    args.model_dir = os.path.join(args.out_dir, 'ckpt-{}'.format(args.class_weight_scheme))
     args.log_dir = os.path.join(args.out_dir, 'log')
-    args.ensemble_dir = os.path.join(args.out_dir, 'ensemble')
+    args.ensemble_dir = os.path.join(args.out_dir, 'ensemble-{}'.format(args.class_weight_scheme))
     prepare_folders(args)
     logger = set_logging(args)
     logger.info("Here is the arguments of this running:")
@@ -52,11 +52,13 @@ def main():
         formal_train_file = formal_merge_file
         logger.info("Use cross-validation, the train file has been setting to {}".format(formal_train_file))
 
-    # Step1. Preprocess and extract features for all tweets
+    # Step0. Extract some info, which is necessary to generate submission files
+    # (must run cross-validate and predict_mode before run the submission mode)
     label2id, majority_label, short2long_label = utils.get_label2id(label_file, formal_train_file, args.cv_num)
     id2label = utils.get_id2label(label2id)
+    class_weight = utils.get_class_weight(label2id, id2label, formal_train_file)
     if args.get_submission:
-        postpro = PostProcess(args, label2id, id2label, majority_label, short2long_label,
+        postpro = PostProcess(args, label2id, id2label, class_weight, majority_label, short2long_label,
                               formal_train_file, formal_2019_test_file, raw_tweets_json_folder)
         if args.pick_criteria == 'threshold':
             threshold = postpro.find_best_threshold() if args.pick_threshold is None else args.pick_threshold
@@ -66,6 +68,8 @@ def main():
         else:
             raise ValueError("Invalid value {} for args.pick_criteria".format(args.pick_criteria))
         quit()
+
+    # Step1. Preprocess and extract features for all tweets
     tweetid_list, tweet_content_list = utils.get_tweetid_content(tweet_file_list)
     utils.write_tweet_and_ids(tweetid_list, tweet_content_list, tweet_text_out_file, tweet_id_out_file)
     tweetid_list_2019, tweet_content_list_2019 = utils.get_tweetid_content(tweet_file_list_2019)
@@ -85,7 +89,7 @@ def main():
         metric_names = None
         for event_type in utils.idx2event_type:
             it_data_x, it_data_y = data_x[event_type], data_y[event_type]
-            train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len, event_type)
+            train = Train(args, it_data_x, it_data_y, id2label, preprocess.feature_len, class_weight, event_type)
             metrics, predict_score = train.train()
             for i, idx in enumerate(event2idx_list[event_type]):
                 data_predict_collect[idx] = predict_score[i]
@@ -95,7 +99,7 @@ def main():
         utils.get_final_metrics(metrics_collect, metric_names)
     else:
         data_x, data_y = preprocess.extract_train_data(formal_train_file)
-        train = Train(args, data_x, data_y, id2label, preprocess.feature_len)
+        train = Train(args, data_x, data_y, id2label, preprocess.feature_len, class_weight)
         _, data_predict_collect = train.train()
     if args.predict_mode:
         utils.write_predict_and_label(args, formal_train_file, label2id, data_predict_collect)
@@ -110,14 +114,14 @@ def main():
                 if len(it_test_x) == 0:
                     print("[WARNING] There are no event belongs to {} for the test data".format(event_type))
                     continue
-                train = Train(args, it_data_x, it_data_y, id2label, preprocess_2019.feature_len, event_type)
+                train = Train(args, it_data_x, it_data_y, id2label, preprocess_2019.feature_len, class_weight, event_type)
                 train.train_on_all()
                 predict_score = train.predict_on_test(it_test_x)
                 for i, idx in enumerate(event2idx_list[event_type]):
                     test_predict_collect[idx] = predict_score[i]
         else:
             test_x = preprocess_2019.extract_formalized_test_data(formal_2019_test_file)
-            train = Train(args, data_x, data_y, id2label, preprocess_2019.feature_len)
+            train = Train(args, data_x, data_y, id2label, preprocess_2019.feature_len, class_weight)
             train.train_on_all()
             test_predict_collect = train.predict_on_test(test_x)
         utils.write_predict_res_to_file(args, test_predict_collect)

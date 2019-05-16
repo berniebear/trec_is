@@ -2,6 +2,7 @@ import os
 import re
 import logging
 import json
+import math
 from typing import List, Dict
 import numpy as np
 import pickle
@@ -51,6 +52,8 @@ event2type = {'costaRicaEarthquake2012': 'earthquake',
               'shootingDallas2017': 'shooting',
               'fireYMM2016': 'wildfire'}
 assert len(set(event2type.values())) == 6
+
+priority2score = {'Low': 0.1, 'Medium': 0.3, 'High': 0.8, 'Critical': 1.0}
 
 
 class GloveVectorizer(object):
@@ -104,6 +107,7 @@ def check_args_conflict(args):
     :return:
     """
     assert args.cross_validate is True, "Current code focus on cross validation on 2018-train + 2018-test"
+    assert args.late_fusion is False, "To make the code easier to modify, we don't support late-fusion any more"
     assert args.train_on_small is False, "This function is deprecated"
     if args.event_wise or args.train_on_small:
         assert args.cross_validate is True
@@ -116,6 +120,40 @@ def check_args_conflict(args):
     if args.search_best_parameters:
         assert args.event_wise is False, "Current model doesn't support search best parameter for event-wise model" \
                                          "We recommend to search parameter for general model and direct apply event-wise"
+
+
+def get_class_weight(label2id: Dict[str, int], id2label: List[str], formal_train_file: str) -> List[float]:
+    """
+    As the host says they will pay more attention to the "important" classes, we want to calculate the weight
+        according to training file.
+    The original expression in official webiste is:
+        We mostly care about getting actionable information to the response officer,
+        and less about other categories like sentiment or general news reporting
+    :return:
+    """
+    class_weight = [1.0 / len(label2id)] * len(label2id)
+    class_sum_score = {i: 0.0 for i in range(len(label2id))}
+    class_count = {i: 0 for i in range(len(label2id))}
+    priority_unk_count = 0
+    with open(formal_train_file, 'r', encoding='utf8') as f:
+        for line in f:
+            line = line.strip().split('\t')
+            class_labels, priority = line[1].split(','), line[2]
+            if priority == 'Unknown':
+                priority_unk_count += 1
+                continue
+            score = priority2score[priority]
+            for label in class_labels:
+                idx = label2id[label]
+                class_sum_score[idx] += score
+                class_count[idx] += 1
+    for i in range(len(class_weight)):
+        class_weight[i] = class_sum_score[i] / class_count[i]
+    print("There are {0} lines have 'Unknown' as priority, just ignored them".format(priority_unk_count))
+    print("After calculating class weight, the new weight is:")
+    for i_label in np.argsort(class_weight)[::-1]:
+        print("{0}: {1}".format(id2label[i_label], class_weight[i_label]))
+    return class_weight
 
 
 def save_variable_to_file(variables_dict: Dict, target_filename):
@@ -479,6 +517,25 @@ def get_id2label(label2id: dict):
     for label, idx in label2id.items():
         id2label[idx] = label
     return id2label
+
+
+def evaluate_weighted_sum(y_test: np.ndarray, predict_score: np.ndarray, class_weight: List[float]) -> Dict[str, float]:
+    """
+    Because different classes have different weights, here we evaluate the predict score according to different weights
+    We use the cross-entropy which is CE = ylogp + (1-y)log(1-p), and this metric is the larger, the better
+    :param y_test:
+    :param predict_score:
+    :param class_weight:
+    :return:
+    """
+    data_num = y_test.shape[0]
+    Yis1 = y_test == 1
+    epsilon = 1e-15
+    tile_class_weight = np.tile(class_weight, [data_num, 1])
+    predict_score += epsilon
+    weighted_ce = np.sum(np.log(predict_score[Yis1]) * tile_class_weight[Yis1]) + np.sum(np.log(1-predict_score[~Yis1]) * tile_class_weight[~Yis1])
+    weighted_ce = np.squeeze(weighted_ce) / data_num
+    return {'weighted_ce': weighted_ce}
 
 
 def evaluate_any_type(label: np.ndarray, predict: np.ndarray, id2label: List[str]) -> Dict[str, float]:

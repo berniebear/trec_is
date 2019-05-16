@@ -31,7 +31,7 @@ class Preprocess(object):
         self.tweetid2feature = dict()
         self.feature_len = None
         self.feature_collection = []
-        self.feature_used = ['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert-avg-1',
+        self.feature_used = ['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert-avg-1', 'bert-CLS-1',
                              'glove-tfidf', 'fasttext-crawl']
         utils.print_to_log("The feature used is {}".format(self.feature_used))
 

@@ -297,11 +297,22 @@ It means the stratified method is really better than K-folder, but the differenc
 - Retrain skip-thought on additional data
 - Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
 
+### May 14 Discussion
+
+Junpei:
+
+- Check inference code of event-wise (and why the score always 0.04)
+
+- Use class weight to retrain the model
+
+- Pick different thresholds for different classes
+
 ### May 7 Discussion
-- Wait for 2019 test as well as metric release and adjust the model
-- Image feature
-- BERT use CLS and multi-layer
-- Neural models
+
+Junpei:
+
+- [done] Wait for 2019 test as well as metric release and adjust the model
+- [done] BERT use CLS and multi-layer
 
 ### Apr 26 Discussion
 
