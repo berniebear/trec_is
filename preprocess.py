@@ -14,7 +14,7 @@ class Preprocess(object):
         Use feature_used to control which features are used for sentence-level feature extraction.
             Currently available features:
                 ['hand_crafted', 'fasttext-avg', 'fasttext-tfidf', 'glove-avg', 'glove-tfidf',
-                'skip-thought', 'bert-avg/CLS-1/4/8', 'fasttext-crawl', 'hashtag']
+                'skip-thought', 'bert-avg/CLS-1/4/8', 'fasttext-crawl', 'fasttext-1M-balanced-event', 'hashtag']
         :param args:
         :param tweetid_list:
         :param tweet_content_list:
@@ -32,7 +32,7 @@ class Preprocess(object):
         self.feature_len = None
         self.feature_collection = []
         self.feature_used = ['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert-avg-1', 'bert-CLS-1',
-                             'glove-tfidf', 'fasttext-crawl','fasttext-1M-balanced-event']
+                             'glove-tfidf', 'fasttext-crawl']
         utils.print_to_log("The feature used is {}".format(self.feature_used))
 
     def _collect_feature(self, feature, feat_name):
