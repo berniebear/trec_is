@@ -54,6 +54,8 @@ event2type = {'costaRicaEarthquake2012': 'earthquake',
 assert len(set(event2type.values())) == 6
 
 priority2score = {'Low': 0.1, 'Medium': 0.3, 'High': 0.8, 'Critical': 1.0}
+# Notice we use the old label (used in 2018) here, such as 'SignificantEventChange' instead of 'NewSubEvent'
+informative_categories = ['GoodsServices', 'SearchAndRescue', 'MovePeople', 'EmergingThreats', 'SignificantEventChange', 'ServiceAvailable']
 
 
 class GloveVectorizer(object):

@@ -1,7 +1,10 @@
 import random
 import numpy as np
 
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.multioutput import MultiOutputClassifier
 
 from utils import stratify_split
 
@@ -37,8 +40,24 @@ def test_stratify_split():
         print()
 
 
+def test_multilabel_classify():
+    rf = RandomForestClassifier(class_weight=[{0: 1, 1: 1}, {0: 1, 1: 1}, {0: 1, 1: 1}])
+    # rf = RandomForestClassifier(class_weight={0: 1, 1: 1, 2: 1})
+    # rf = OneVsRestClassifier(rf)
+    # rf = MultiOutputClassifier(rf)
+
+    x = np.asarray([[0.2, 0.3], [0.4, 0.5]])
+    y = np.asarray([[0], [1, 2]])
+    mlb = MultiLabelBinarizer()
+    y = mlb.fit_transform(y)
+
+    rf.fit(x, y)
+    print(rf.predict_proba(np.asarray([[-10.0, -10.0], [0.7, 0.5]])))
+    print(rf.classes_)
+
+
 if __name__ == '__main__':
     random_seed = 9
     random.seed(random_seed)
     np.random.seed(random_seed)
-    test_stratify_split()
+    test_multilabel_classify()
