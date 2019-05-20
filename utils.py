@@ -151,6 +151,9 @@ def get_class_weight(label2id: Dict[str, int], id2label: List[str], formal_train
                 class_count[idx] += 1
     for i in range(len(class_weight)):
         class_weight[i] = class_sum_score[i] / class_count[i]
+    # Some informative classes are more important
+    for category in informative_categories:
+        class_weight[label2id[category]] = min(class_weight[label2id[category]] + 0.2, 1.0)
     print("There are {0} lines have 'Unknown' as priority, just ignored them".format(priority_unk_count))
     print("After calculating class weight, the new weight is:")
     for i_label in np.argsort(class_weight)[::-1]:

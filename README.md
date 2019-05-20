@@ -300,8 +300,7 @@ It means the stratified method is really better than K-folder, but the differenc
 
 Junpei:
 
-- cope with rf class_weight (because in onevsrest setting there are only two classes)
-- imbalance class for XGBoost
+- [done] cope with rf class_weight (because in onevsrest setting there are only two classes)
 - Read new post in Google group about the importance of different categories
 - Check inference code of event-wise (and why the score always 0.04)
 - [done] Use class weight to retrain the model
