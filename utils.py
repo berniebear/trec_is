@@ -54,6 +54,8 @@ event2type = {'costaRicaEarthquake2012': 'earthquake',
 assert len(set(event2type.values())) == 6
 
 priority2score = {'Low': 0.1, 'Medium': 0.3, 'High': 0.8, 'Critical': 1.0}
+# Notice we use the old label (used in 2018) here, such as 'SignificantEventChange' instead of 'NewSubEvent'
+informative_categories = ['GoodsServices', 'SearchAndRescue', 'MovePeople', 'EmergingThreats', 'SignificantEventChange', 'ServiceAvailable']
 
 
 class GloveVectorizer(object):
@@ -149,6 +151,9 @@ def get_class_weight(label2id: Dict[str, int], id2label: List[str], formal_train
                 class_count[idx] += 1
     for i in range(len(class_weight)):
         class_weight[i] = class_sum_score[i] / class_count[i]
+    # Some informative classes are more important
+    for category in informative_categories:
+        class_weight[label2id[category]] = min(class_weight[label2id[category]] + 0.2, 1.0)
     print("There are {0} lines have 'Unknown' as priority, just ignored them".format(priority_unk_count))
     print("After calculating class weight, the new weight is:")
     for i_label in np.argsort(class_weight)[::-1]:

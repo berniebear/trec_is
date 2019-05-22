@@ -31,6 +31,8 @@ class Train(object):
         If we use late fusion, the feature_lens will contain real lens of different features.
         If we don't use late fusion, feature_lens will contain a fake number which is the len of concatenated feature
         Please see details in _fit_data and _predict_data about how we cope with late fusion
+        Notice that as we use one-vs-rest setting for multi-class classification, the class weight should be 'balanced',
+            or in the form of one-vs-res, such as [{0: X, 1: Y} ...] as shown in the parameter explaination in rf
         :param args:
         :param data_x:
         :param data_y:
@@ -45,10 +47,16 @@ class Train(object):
         self.data_y = data_y
         self.id2label = id2label
         self.feature_lens = feature_lens
-        self.class_weight = class_weight
         self.metric_names: List[str] = ['accuracy', 'precision', 'recall', 'f1'] if args.class_weight_scheme == 'balanced' else ['weighted_ce']
         self.clf: List[OneVsRestClassifier] = None
         self.event_type = event_type
+
+        self.class_weight_list = class_weight
+        if self.args.class_weight_scheme == 'balanced':
+            self.class_weight = 'balanced'
+        else:
+            mean_weight = np.mean(class_weight)
+            self.class_weight = [{0: mean_weight, 1: weight} for weight in class_weight]
 
     def train_on_all(self):
         """
@@ -178,39 +186,35 @@ class Train(object):
         self.clf = [self._create_single_model(param) for i in range(len(self.feature_lens))]
 
     def _create_single_model(self, param=None):
-        if self.args.class_weight_scheme == 'balanced':
-            class_weight = 'balanced'
-        elif self.args.class_weight_scheme == 'customize':
-            class_weight = {i: weight for i, weight in enumerate(self.class_weight)}
-        else:
-            raise ValueError("Invalid value {} for args.class_weight_scheme".format(self.args.class_weight_scheme))
-
         model_name = self.args.model
         print_to_log("The model used here is {0}".format(model_name))
         if model_name == 'sgd_svm':
-            clf = SGDClassifier(max_iter=1000, tol=1e-3, loss='hinge', class_weight=class_weight)
+            clf = SGDClassifier(max_iter=1000, tol=1e-3, loss='hinge', class_weight=self.class_weight)
         elif model_name == 'svm_linear':
             if not param:
-                param = {'class_weight': class_weight, "C": 0.1, "dual": False, "penalty": "l2"}
+                param = {'class_weight': self.class_weight, "C": 0.1, "dual": False, "penalty": "l2"}
             clf = CalibratedClassifierCV(LinearSVC(**param))  # Set dual=False when training num >> feature num
         elif model_name == 'svm_rbf':
-            clf = SVC(kernel='rbf', class_weight=class_weight, gamma='auto', probability=True)
+            clf = SVC(kernel='rbf', class_weight=self.class_weight, gamma='auto', probability=True)
         elif model_name == 'svm_rbf_scale':
-            clf = SVC(kernel='rbf', class_weight=class_weight, gamma='scale', probability=True)
+            clf = SVC(kernel='rbf', class_weight=self.class_weight, gamma='scale', probability=True)
         elif model_name == 'svm_chi2':
-            clf = SVC(kernel=chi2_kernel, class_weight=class_weight, probability=True)
+            clf = SVC(kernel=chi2_kernel, class_weight=self.class_weight, probability=True)
         elif model_name == 'gs_nb':
             clf = GaussianNB()
         elif model_name == 'bernoulli_nb':
             if not param:
-                param = {'alpha': 0.8490, 'binarize': 0.3086, 'fit_prior': True}
+                if self.args.class_weight_scheme == 'balanced':
+                    param = {'alpha': 0.8490, 'binarize': 0.3086, 'fit_prior': True}
+                else:
+                    param = {'alpha': 0.4974, 'binarize': 0.7751, 'fit_prior': True}
             clf = BernoulliNB(**param)
         elif model_name == 'rf':
             if not param:
                 param = {
                     'n_estimators': 128,
                     "n_jobs": 1,
-                    'class_weight': class_weight,
+                    'class_weight': self.class_weight,
                     'criterion': 'gini',
                     'max_depth': 64,
                     'max_features': 213,
@@ -220,18 +224,31 @@ class Train(object):
             clf = RandomForestClassifier(**param)
         elif model_name == 'xgboost':
             if not param:
-                param = {'subsample': 0.9,
-                         'n_jobs': 1,
-                         'n_estimators': 500,
-                         'max_depth': 8,
-                         'learning_rate': 0.05,
-                         'gamma': 0,
-                         'colsample_bytree': 0.9,
-                         }
+                if self.args.class_weight_scheme == 'balanced':
+                    param = {'subsample': 0.9,
+                             'n_jobs': 1,
+                             'n_estimators': 500,
+                             'max_depth': 8,
+                             'learning_rate': 0.05,
+                             'gamma': 0,
+                             'colsample_bytree': 0.9,
+                             }
+                else:
+                    param = {'subsample': 0.9,
+                             'n_jobs': 1,
+                             'n_estimators': 300,
+                             'max_depth': 3,
+                             'learning_rate': 0.03,
+                             'gamma': 5,
+                             'colsample_bytree': 1.0,
+                             }
             clf = XGBClassifier(**param)
         else:
             raise NotImplementedError
-        return OneVsRestClassifier(clf, n_jobs=self.args.n_jobs)
+        if self.args.class_weight_scheme == 'balanced':
+            return OneVsRestClassifier(clf, n_jobs=self.args.n_jobs)
+        else:
+            return clf
 
     def _random_search_best_para(self, n_iter):
         if self.args.search_by_sklearn_api:
@@ -253,7 +270,7 @@ class Train(object):
         :return:
         """
         if self.args.model == 'rf':
-            clf = RandomForestClassifier(n_estimators=128, class_weight="balanced", n_jobs=1)
+            clf = RandomForestClassifier(n_estimators=128, class_weight=self.class_weight, n_jobs=1)
             param_dist = {
                 "estimator__max_depth": [2, 4, 8, 16, 32, 64, 128, None],
                 "estimator__max_features": scipy.stats.randint(1, 512),
@@ -273,7 +290,7 @@ class Train(object):
             param_dist = {
                 "penalty": ['l1', 'l2'],
                 "C": [0.1, 1, 10, 100, 1000],
-                "class_weight": ['balanced'],
+                "class_weight": [self.class_weight],
                 "dual": [False],
             }
         elif self.args.model == 'xgboost':
@@ -323,8 +340,8 @@ class Train(object):
                 "min_samples_leaf": scipy.stats.randint(2, 512),
                 "criterion": ["gini", "entropy"],
                 "n_estimators": [128],
-                "class_weight": ["balanced"],
-                "n_jobs": [1],
+                "class_weight": [self.class_weight],
+                "n_jobs": [1 if self.args.class_weight_scheme == 'balanced' else 4],
             }
         elif self.args.model == 'bernoulli_nb':
             param_dist = {
@@ -336,7 +353,7 @@ class Train(object):
             param_dist = {
                 "penalty": ['l1', 'l2'],
                 "C": [0.1, 1, 10, 100, 1000],
-                "class_weight": ['balanced'],
+                "class_weight": [self.class_weight],
                 "dual": [False],
             }
         elif self.args.model == 'xgboost':
@@ -450,6 +467,24 @@ class Train(object):
         print("The ratio for each class is {}".format(count_ratio))
         print("The weighted average ratio is {}".format(sum_val / sum_count))
 
+    def _get_predict_score(self, X_data) -> np.ndarray:
+        """
+        Get the predict score in the form of [num_instance, num_class]
+        If self.args.class_weight_scheme is 'customize', the predict_proba will return a list of n_outputs arrays
+            where each array of shape = [n_samples, n_classes]
+        :return:
+        """
+        if self.args.class_weight_scheme == 'balanced':
+            return self.clf[0].predict_proba(X_data)
+        else:
+            prob_array_list = self.clf[0].predict_proba(X_data)
+            res = np.zeros([len(X_data), len(prob_array_list)])
+            for i_class, prob_array in enumerate(prob_array_list):
+                for i_instance, row in enumerate(prob_array):
+                    res[i_instance, i_class] = row[1]
+            assert sum([x[0] for x in self.clf[0].classes_]) == 0, "all index 1 should correspond to 1"
+            return res
+
     def _cross_validate(self):
         """
         If we are performing event-wise training, we need to return the metrics for each running (event)
@@ -468,14 +503,14 @@ class Train(object):
             X_test = self.data_x[test_idx_list]
             y_test = self.data_y[test_idx_list]
             self._fit_data(X_train, y_train)
-            predict_score = self.clf[0].predict_proba(X_test)
+            predict_score = self._get_predict_score(X_test)
             dev_predict[test_idx_list] = predict_score
 
             if self.args.class_weight_scheme == 'balanced':
                 y_predict = self._predict_data(X_test)
                 metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
             else:
-                metric_results = utils.evaluate_weighted_sum(y_test, predict_score, self.class_weight)
+                metric_results = utils.evaluate_weighted_sum(y_test, predict_score, self.class_weight_list)
 
             for metric_name in self.metric_names:
                 metric_values[metric_name].append([metric_results[metric_name], len(y_test)])
@@ -502,4 +537,4 @@ class Train(object):
         :param test_data:
         :return:
         """
-        return self.clf[0].predict_proba(test_data)
+        return self._get_predict_score(test_data)

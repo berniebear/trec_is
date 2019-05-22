@@ -14,7 +14,7 @@ class Preprocess(object):
         Use feature_used to control which features are used for sentence-level feature extraction.
             Currently available features:
                 ['hand_crafted', 'fasttext-avg', 'fasttext-tfidf', 'glove-avg', 'glove-tfidf',
-                'skip-thought', 'bert-avg/CLS-1/4/8', 'fasttext-crawl', 'hashtag']
+                'skip-thought', 'bert-avg/CLS-1/4/8', 'fasttext-crawl', 'fasttext-1M-balanced-event', 'hashtag']
         :param args:
         :param tweetid_list:
         :param tweet_content_list:

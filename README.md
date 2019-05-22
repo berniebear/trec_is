@@ -284,7 +284,7 @@ It means the stratified method is really better than K-folder, but the differenc
 
 
 ## Todo
-- Submit four models: One single + One single event-wise + ensemble + ensemble event-wise
+- Submit four models: class_weight_scheme balanced/customize + pick up threshold / top 2
 - Round-trip translation / paraphrase (SemEval 2015 Task 1) to do data augmentation
 - First classify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
 - Use a better method to predict the importance score
@@ -295,16 +295,15 @@ It means the stratified method is really better than K-folder, but the differenc
 - Use time to predict the priority of tweets, and give high priority tweets more weights in train
 - Use indicator terms (such as forming a bag of words) in 2018 training data, because it is a quite important label provided by human labelers
 - Retrain skip-thought on additional data
-- Change labels in data file according to the [changes in 2019](http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html) 
 
 ### May 14 Discussion
 
 Junpei:
 
+- [done] cope with rf class_weight (because in onevsrest setting there are only two classes)
+- Read new post in Google group about the importance of different categories
 - Check inference code of event-wise (and why the score always 0.04)
-
-- Use class weight to retrain the model
-
+- [done] Use class weight to retrain the model
 - Pick different thresholds for different classes
 
 ### May 7 Discussion
