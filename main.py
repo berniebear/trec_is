@@ -66,7 +66,7 @@ def main():
         elif args.pick_criteria == 'top':
             postpro.pick_top_k(args.pick_k)
         else:
-            raise ValueError("Invalid value {} for args.pick_criteria".format(args.pick_criteria))
+            postpro.pick_by_autothre()
         quit()
 
     # Step1. Preprocess and extract features for all tweets

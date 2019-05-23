@@ -70,8 +70,9 @@ def get_arguments():
     # For final submission
     parser.add_argument("--get_submission", action="store_true",
                         help="Generate submission file for TREC-IS")
-    parser.add_argument("--pick_criteria", type=str, default='top', choices=['top', 'threshold'],
-                        help='for threshold you can set pick_threshold, and for top you can set pick_k')
+    parser.add_argument("--pick_criteria", type=str, default='top', choices=['top', 'threshold', 'autothre'],
+                        help='for threshold you can set pick_threshold, and for top you can set pick_k, '
+                             'for autothre you don\'t need to set anything, because it uses different threshold for each class')
     parser.add_argument("--pick_threshold", type=float, default=None,
                         help='If None, our model will search best threshold')
     parser.add_argument("--pick_k", type=int, default=2,

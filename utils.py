@@ -122,6 +122,8 @@ def check_args_conflict(args):
     if args.search_best_parameters:
         assert args.event_wise is False, "Current model doesn't support search best parameter for event-wise model" \
                                          "We recommend to search parameter for general model and direct apply event-wise"
+    if args.class_weight_scheme == 'customize':
+        assert args.model == 'rf', "We only support random forest for customized weight"
 
 
 def get_class_weight(label2id: Dict[str, int], id2label: List[str], formal_train_file: str) -> List[float]:

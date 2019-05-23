@@ -52,8 +52,10 @@ class PostProcess(object):
 
     def _prepare_submission_folder(self):
         temp = self.args.pick_k if self.args.pick_criteria == 'top' else self.args.pick_threshold
+        if self.args.pick_criteria == 'autothre':
+            temp = None
         submission_folder = 'submit-{0}-{1}'.format(self.args.pick_criteria, 'None' if temp is None else temp)
-        submission_folder = os.path.join(self.args.out_dir, submission_folder)
+        submission_folder = os.path.join(self.args.ensemble_dir, submission_folder)
         if not os.path.isdir(submission_folder):
             os.mkdir(submission_folder)
         return submission_folder
@@ -64,37 +66,6 @@ class PostProcess(object):
             for line in f:
                 tweetid_list.append(line.strip().split('\t')[0])
         return tweetid_list
-
-    def _get_class_weight(self):
-        """
-        As the host says they will pay more attention to the "important" classes, we want to calculate the weight
-            according to training file.
-        The original expression in official webiste is:
-            We mostly care about getting actionable information to the response officer,
-            and less about other categories like sentiment or general news reporting
-        :return:
-        """
-        class_sum_score = {i: 0.0 for i in range(len(self.label2id))}
-        class_count = {i: 0 for i in range(len(self.label2id))}
-        priority_unk_count = 0
-        with open(self.formal_train_file, 'r', encoding='utf8') as f:
-            for line in f:
-                line = line.strip().split('\t')
-                class_labels, priority = line[1].split(','), line[2]
-                if priority == 'Unknown':
-                    priority_unk_count += 1
-                    continue
-                score = priority2score[priority]
-                for label in class_labels:
-                    idx = self.label2id[label]
-                    class_sum_score[idx] += score
-                    class_count[idx] += 1
-        for i in range(len(self.class_weight)):
-            self.class_weight[i] = class_sum_score[i] / class_count[i]
-        print("There are {0} lines have 'Unknown' as priority, just ignored them".format(priority_unk_count))
-        print("After calculating class weight, the new weight is:")
-        for i_label in np.argsort(self.class_weight)[::-1]:
-            print("{0}: {1}".format(self.id2label[i_label], self.class_weight[i_label]))
 
     def _read_test_predict(self):
         predict_res = []
@@ -143,19 +114,6 @@ class PostProcess(object):
                     tweetid2incidentid[tweetid] = incidentid
         return tweetid2incidentid
 
-    def find_best_threshold(self) -> float:
-        self._read_dev_label_predict()
-        best_threshold = 0.2
-        best_score = 0.0
-        candidates = [i / 10 for i in range(2, 10)]
-        for threshold in candidates:
-            weighted_score = self._get_weighted_score(threshold)
-            if weighted_score > best_score:
-                best_score = weighted_score
-                best_threshold = threshold
-        print("After searching threshold in {0}, the best threshold is {1}".format(candidates, best_threshold))
-        return best_threshold
-
     def _get_score_of_predictions(self, predictions: List[int]):
         return sum([self.class_weight[idx] for idx in predictions]) / len(predictions)
 
@@ -200,6 +158,60 @@ class PostProcess(object):
               "and {1} Unknown and we use {2} to replace them".format(count_modify, count_unk,
                                                                       self.short2long_label[self.majority_label]))
         print("The final submission result has been written to {}".format(self.submission_file))
+
+    def _get_threshold_for_each_class(self) -> List[float]:
+        assert len(self.dev_label) == len(self.dev_predict)
+        threshold_list = []
+        for i_class in range(len(self.id2label)):
+            best_threshold = 0.1
+            best_weighted_sum = float("-inf")
+            for threshold in [x / 10 for x in range(1, 10)]:
+                weighted_sum = 0.0
+                for i in range(len(self.dev_label)):
+                    if (i_class in self.dev_label[i]) == (self.dev_predict[i][i_class] >= threshold):
+                        weighted_sum += self.class_weight[i_class]
+                    else:
+                        weighted_sum -= self.class_weight[i_class]
+                if weighted_sum > best_weighted_sum:
+                    best_weighted_sum = weighted_sum
+                    best_threshold = threshold
+            threshold_list.append(best_threshold)
+        return threshold_list
+
+    def pick_by_autothre(self):
+        """
+        For the autothre mode, we pick thresholds for each class separately, to make the weighted sum loss minimum.
+        :return:
+        """
+        self._read_dev_label_predict()
+        threshold_list = self._get_threshold_for_each_class()
+        incidentid2content_list = {incidentid: [] for incidentid in self.incidentid_list}
+        for i, predict_scores in enumerate(self.test_predict):
+            tweetid = self.test_tweetid_list[i]
+            incidentid = self.tweetid2incidentid[tweetid]
+            predictions = []
+            for idx, score in enumerate(predict_scores):
+                if score >= threshold_list[idx]:
+                    predictions.append(idx)
+            if len(predictions) == 0:
+                predictions.append(np.argmax(predict_scores))
+            line_contents = [tweetid, self._get_score_of_predictions(predictions), predictions]
+            incidentid2content_list[incidentid].append(line_contents)
+        print("The threshold for each class is: {}".format(threshold_list))
+        self._write_incidentid2content_list_to_file(incidentid2content_list)
+
+    def find_best_threshold(self) -> float:
+        self._read_dev_label_predict()
+        best_threshold = 0.2
+        best_score = 0.0
+        candidates = [i / 10 for i in range(2, 10)]
+        for threshold in candidates:
+            weighted_score = self._get_weighted_score(threshold)
+            if weighted_score > best_score:
+                best_score = weighted_score
+                best_threshold = threshold
+        print("After searching threshold in {0}, the best threshold is {1}".format(candidates, best_threshold))
+        return best_threshold
 
     def pick_by_threshold(self, threshold: float):
         """

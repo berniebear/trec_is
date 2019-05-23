@@ -211,37 +211,39 @@ class Train(object):
             clf = BernoulliNB(**param)
         elif model_name == 'rf':
             if not param:
-                param = {
-                    'n_estimators': 128,
-                    "n_jobs": 1,
-                    'class_weight': self.class_weight,
-                    'criterion': 'gini',
-                    'max_depth': 64,
-                    'max_features': 213,
-                    'min_samples_leaf': 5,
-                    'min_samples_split': 43,
-                }
+                if self.args.class_weight_scheme == 'balanced':
+                    param = {
+                        'n_estimators': 128,
+                        "n_jobs": 1,
+                        'class_weight': self.class_weight,
+                        'criterion': 'gini',
+                        'max_depth': 64,
+                        'max_features': 213,
+                        'min_samples_leaf': 5,
+                        'min_samples_split': 43,
+                    }
+                else:
+                    param = {
+                        'n_estimators': 128,
+                        "n_jobs": self.args.n_jobs,
+                        'class_weight': self.class_weight,
+                        'criterion': 'gini',
+                        'max_depth': 64,
+                        'max_features': 494,
+                        'min_samples_leaf': 24,
+                        'min_samples_split': 207,
+                    }
             clf = RandomForestClassifier(**param)
         elif model_name == 'xgboost':
             if not param:
-                if self.args.class_weight_scheme == 'balanced':
-                    param = {'subsample': 0.9,
-                             'n_jobs': 1,
-                             'n_estimators': 500,
-                             'max_depth': 8,
-                             'learning_rate': 0.05,
-                             'gamma': 0,
-                             'colsample_bytree': 0.9,
-                             }
-                else:
-                    param = {'subsample': 0.9,
-                             'n_jobs': 1,
-                             'n_estimators': 300,
-                             'max_depth': 3,
-                             'learning_rate': 0.03,
-                             'gamma': 5,
-                             'colsample_bytree': 1.0,
-                             }
+                param = {'subsample': 0.9,
+                         'n_jobs': 1,
+                         'n_estimators': 500,
+                         'max_depth': 8,
+                         'learning_rate': 0.05,
+                         'gamma': 0,
+                         'colsample_bytree': 0.9,
+                         }
             clf = XGBClassifier(**param)
         else:
             raise NotImplementedError
