@@ -893,21 +893,22 @@ def extract_cbnu_user_feature(content_list: list, annotated_user_type: dict) -> 
         # news, weather, organization, donation, disaster information, multimedia
         current_feature = [0] * 6
         user_mentions = content['entities']['user_mentions']
-        for user_metion in user_mentions:
-            if user_metion['id_str'] in annotated_user_type.keys():
-                mention_type = annotated_user_type['id_str']
-                if mention_type == 'news':
-                    current_feature[0] = 1
-                elif mention_type == 'weather':
-                    current_feature[1] = 1
-                elif mention_type == 'organization':
-                    current_feature[2] = 1
-                elif mention_type == 'donation':
-                    current_feature[3] = 1
-                elif mention_type == 'disaster':
-                    current_feature[4] = 1
-                elif mention_type == 'multimedia':
-                    current_feature[5] = 1
+        if len(user_mentions) > 0:
+            for user_metion in user_mentions:
+                if user_metion['id_str'] in annotated_user_type.keys():
+                    mention_type = annotated_user_type['id_str']
+                    if mention_type == 'news':
+                        current_feature[0] = 1
+                    elif mention_type == 'weather':
+                        current_feature[1] = 1
+                    elif mention_type == 'organization':
+                        current_feature[2] = 1
+                    elif mention_type == 'donation':
+                        current_feature[3] = 1
+                    elif mention_type == 'disaster':
+                        current_feature[4] = 1
+                    elif mention_type == 'multimedia':
+                        current_feature[5] = 1
         feature_list.append(current_feature)
 
     feature_list = np.asarray(feature_list, dtype=np.float32)
