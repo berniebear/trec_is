@@ -15,7 +15,7 @@ def get_arguments():
 
 
 def extract_by_fasttext(sent_list: List[str]) -> np.ndarray:
-    model_path = os.path.join("../../../data", "fasttext_extra", "balanced_event_tweet_1M.bin")
+    model_path = os.path.join("../../../data", "fasttext_extra", "balanced_event_tweet_1_2M.bin")
     model = fastText.load_model(model_path)
     vector_size = model.get_dimension()
 

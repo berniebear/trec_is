@@ -876,6 +876,48 @@ def extract_hand_crafted_feature(content_list: list) -> (np.ndarray, List[str]):
     return feature_list, clean_text_list
 
 
+
+def extract_cbnu_user_feature(content_list: list, annotated_user_type: dict) -> (np.ndarray):
+    """
+    Part of the features are taken from the CBNU paper
+    This function takes a string and returns a list of length 6
+    It indicates whether certain user entity types exist in the user mentions of the tweet 
+    
+    :param content_list:
+    :param annotated_user_type:
+    :return:
+    """
+    feature_list = []
+    # clean_text_list = []
+    for content in content_list:
+        # initialize the feature list with zero
+        # from position 0-5, the number indicates if the following user mention entities exist
+        # news, weather, organization, donation, disaster information, multimedia
+        current_feature = [0] * 6
+        user_mentions = content['entities']['user_mentions']
+        if len(user_mentions) > 0:
+            for user_metion in user_mentions:
+                if user_metion['id_str'] in annotated_user_type.keys():
+                    mention_type = annotated_user_type['id_str']
+                    if mention_type == 'news':
+                        current_feature[0] = 1
+                    elif mention_type == 'weather':
+                        current_feature[1] = 1
+                    elif mention_type == 'organization':
+                        current_feature[2] = 1
+                    elif mention_type == 'donation':
+                        current_feature[3] = 1
+                    elif mention_type == 'disaster':
+                        current_feature[4] = 1
+                    elif mention_type == 'multimedia':
+                        current_feature[5] = 1
+        feature_list.append(current_feature)
+
+    feature_list = np.asarray(feature_list, dtype=np.float32)
+ 
+    return feature_list
+
+
 def get_clean_tweet(tweet: str, enities_info: dict):
     """
     Replace the text in hashtags, and remove the mentions and urls (indices are provided by twitter API)
