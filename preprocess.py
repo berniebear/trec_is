@@ -13,8 +13,8 @@ class Preprocess(object):
         """
         Use feature_used to control which features are used for sentence-level feature extraction.
             Currently available features:
-                ['hand_crafted', 'fasttext-avg', 'fasttext-tfidf', 'glove-avg', 'glove-tfidf',
-                'skip-thought', 'bert-avg/CLS-1/4/8', 'fasttext-crawl', 'fasttext-1M-balanced-event', 'hashtag']
+                ['hand_crafted', 'fasttext-avg', 'fasttext-tfidf', 'glove-avg', 'glove-tfidf', 'cbnu_user_feature',
+                'skip-thought', 'bert-avg/CLS-1/4/8', 'fasttext-crawl', 'fasttext-1_2M-balanced-event', 'hashtag']
         :param args:
         :param tweetid_list:
         :param tweet_content_list:
@@ -23,6 +23,7 @@ class Preprocess(object):
         self.args = args
         self.tweetid_list = tweetid_list
         self.tweet_content_list = tweet_content_list
+        self.annotated_user_type = None
         self.label2id = label2id
         self.tweet_id_out_file = tweet_id_out_file
         self.test = test
@@ -74,10 +75,20 @@ class Preprocess(object):
         :return:
         """
         hand_crafted_feature, clean_texts = utils.extract_hand_crafted_feature(self.tweet_content_list)
+        if "cbnu_user_feature" in self.feature_used:
+            # read annotated user type from external file
+            annotated_user = os.path.join(args.data_dir, 'freq_users.txt') #unsafe operation
+            self.annotated_user_type = {} ### change here
+            for line in open(annotated_user):
+                id_str, user_type = line.strip().split('\t')
+                self.annotated_user_type[id_str] = user_type
+            cbnu_user_feature = utils.extract_cbnu_user_feature(self.tweet_content_list,self.annotated_user_type)
 
         for feat_name in self.feature_used:
             if feat_name == 'hand_crafted':
                 self._collect_feature(hand_crafted_feature, feat_name)
+            elif feat_name = 'cbnu_user_feature':
+                self._collect_feature(cbnu_user_feature, feat_name)
             else:
                 self._read_feature_from_file(feat_name)
 
