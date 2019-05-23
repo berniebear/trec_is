@@ -1,3 +1,4 @@
+import os
 from typing import List, Dict
 import pickle
 import numpy as np
@@ -77,7 +78,7 @@ class Preprocess(object):
         hand_crafted_feature, clean_texts = utils.extract_hand_crafted_feature(self.tweet_content_list)
         if "cbnu_user_feature" in self.feature_used:
             # read annotated user type from external file
-            annotated_user = os.path.join(args.data_dir, 'freq_users.txt') #unsafe operation
+            annotated_user = os.path.join(self.args.data_dir, 'freq_users.txt') #unsafe operation
             self.annotated_user_type = {} ### change here
             for line in open(annotated_user):
                 id_str, user_type = line.strip().split('\t')
@@ -87,7 +88,7 @@ class Preprocess(object):
         for feat_name in self.feature_used:
             if feat_name == 'hand_crafted':
                 self._collect_feature(hand_crafted_feature, feat_name)
-            elif feat_name = 'cbnu_user_feature':
+            elif feat_name == 'cbnu_user_feature':
                 self._collect_feature(cbnu_user_feature, feat_name)
             else:
                 self._read_feature_from_file(feat_name)
