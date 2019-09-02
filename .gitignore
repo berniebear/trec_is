@@ -9,6 +9,8 @@ ckpt/
 skip_thoughts/
 eval/*.txt
 eval/.ipynb_checkpoints
+eval/
 *.pdf
 *.log
 *.ckpt
+*.run

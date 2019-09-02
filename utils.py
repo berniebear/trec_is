@@ -1028,5 +1028,63 @@ def find_true_relevant(event_id='bostonBombings2013'):
                     print("{0}    {1}".format(tweet['postID'], tweet['categories']))
 
 
+def rescale_score(score_list, proportion=0.5, threshold=0.7):
+    """Rescale the score list to make at least `proportion` of data is >= `threshold`.
+
+    For each score that falls in the larger proportion, we use (score - min_score) / (max_score - min_score) to first
+    convert it to [0, 1], and then multiply it by (1 - threshold) to make it to [0, 1-threshold], and finally add it by
+    threshold, to get the final range [threshold, 1].
+    For each score that falls in the smaller proportion, we use the similar process to convert it to [0, threshold].
+
+    :param score_list: A list of score which has been sorted in descending order.
+    :param proportion: The proportion of scores that we want to make them larger than threshold.
+    :param threshold: The threshold.
+
+    :return: The score list after rescaled.
+    """
+    assert len(score_list) > 0
+    assert score_list[0] > score_list[-1]
+    score_num = len(score_list)
+    above_threshold_num = int(proportion * score_num)
+
+    above_threshold_min_score = score_list[above_threshold_num - 1]
+    above_threshold_max_score = score_list[0]
+    above_max_min_diff = above_threshold_max_score - above_threshold_min_score
+    below_threshold_min_score = score_list[-1]
+    below_threshold_max_score = above_threshold_min_score
+    below_max_min_diff = below_threshold_max_score - below_threshold_min_score
+    for idx, score in enumerate(score_list):
+        if score < above_threshold_min_score:
+            score_list[idx] = ((score - below_threshold_min_score) / below_max_min_diff) * threshold
+        else:
+            score_list[idx] = ((score - above_threshold_min_score) / above_max_min_diff) * (1 - threshold) + threshold
+    return score_list
+
+
+def rescale_and_write(content_list, f_out):
+    score_list = [float(content[4]) for content in content_list]
+    score_list = rescale_score(score_list, proportion=0.02)
+    for idx, content in enumerate(content_list):
+        content[4] = str(score_list[idx])
+        f_out.write("\t".join(content) + "\n")
+
+
+def get_rescale_file(model_name='rf'):
+    input_file = os.path.join('eval', '{}.run'.format(model_name))
+    out_file = os.path.join('eval', '{}-rescale.run'.format(model_name))
+    content_list = []
+    last_dataset_name = None
+    f_out = open(out_file, 'w')
+    with open(input_file, 'r') as f:
+        for line in f:
+            content = line.strip().split('\t')
+            dataset_name = content[0]
+            if last_dataset_name is not None and dataset_name != last_dataset_name:
+                rescale_and_write(content_list, f_out)
+            content_list.append(content)
+    rescale_and_write(content_list, f_out)
+    f_out.close()
+
+
 if __name__ == '__main__':
-    find_true_relevant()
+    get_rescale_file()

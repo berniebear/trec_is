@@ -9,6 +9,8 @@ TREC Incident Stream shared task (official website [here](http://dcs.gla.ac.uk/~
 
 `TensorFlow==1.12.0` (not necessary for running the main.py, but needed for extracting features by `BERT` and `Skip-thought`, please refer to `feature_tools` folder for details)
 
+`spacy==2.0.16` with `python -m spacy download en_core_web_sm`.
+
 If you don't have sudo on server, you can use conda to manage all packages.
 
 ### How to Run
