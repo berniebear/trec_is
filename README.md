@@ -374,6 +374,14 @@ Bernie:
 - Check the correctness of get_clean_tweet in utils
 - Classifier part
 
+## Demo for displaying tweets
+
+The `utils_display.py` provide tools to extract some tweets along with some information that could be displayed
+for the demo.
+Note that the `rf.run` in that script is the output file of our system, which is the final submission file.
+
+The demo is in another private repo `Display-Tweets`.
+
 ## Reference
 
 Official Baseline system: https://github.com/cbuntain/trecis
