@@ -283,9 +283,13 @@ When we use the KFold of sklearn, we get the weighted average ratio around `3.95
 When we implement the stratified K-fold based on a paper published on 2011, the ratio is around `4.00`.
 It means the stratified method is really better than K-folder, but the difference is not so obvious.
 
+## 2019-B Todo
 
+1. Adjust parameters for type classification according to the new evaluation script.
 
-## Todo
+2. Regression to get priority score.
+
+## 2019-A Todo
 - Submit four models: class_weight_scheme balanced/customize + pick up threshold / top 2
 - Round-trip translation / paraphrase (SemEval 2015 Task 1) to do data augmentation
 - First classify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
