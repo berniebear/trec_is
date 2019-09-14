@@ -6,7 +6,7 @@ import pandas as pd
 import scipy
 import pickle
 from sklearn.model_selection import KFold, RandomizedSearchCV, ParameterSampler, GridSearchCV, ParameterGrid
-from sklearn.linear_model import SGDClassifier
+from sklearn.linear_model import SGDClassifier, Ridge
 from sklearn.svm import SVC, LinearSVC
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.metrics import f1_score, make_scorer
@@ -60,8 +60,8 @@ class Train(object):
 
     def train_on_all(self):
         """
-        A wrapper for train on all data, which is used to prepare for the prediction on test data
-        Notice that here we don't use cross-validation, because cv is only used for parameter-choosing
+        A wrapper for train on all data, which is used to prepare for the prediction on test data.
+        Notice that here we don't use cross-validation, because cv is only used for parameter-choosing.
         Now we have determined the parameter, and we want to train on all data we have (self.data_x and self.data_y)
         :return:
         """
@@ -469,18 +469,19 @@ class Train(object):
         print("The ratio for each class is {}".format(count_ratio))
         print("The weighted average ratio is {}".format(sum_val / sum_count))
 
-    def _get_predict_score(self, X_data) -> np.ndarray:
+    def _get_predict_score(self, x_data: np.ndarray) -> np.ndarray:
         """
         Get the predict score in the form of [num_instance, num_class]
         If self.args.class_weight_scheme is 'customize', the predict_proba will return a list of n_outputs arrays
             where each array of shape = [n_samples, n_classes]
-        :return:
+        :param x_data: Test data on which we will predict score.
+        :return: An ndarray with size [num_instance, num_class].
         """
         if self.args.class_weight_scheme == 'balanced':
-            return self.clf[0].predict_proba(X_data)
+            return self.clf[0].predict_proba(x_data)
         else:
-            prob_array_list = self.clf[0].predict_proba(X_data)
-            res = np.zeros([len(X_data), len(prob_array_list)])
+            prob_array_list = self.clf[0].predict_proba(x_data)
+            res = np.zeros([len(x_data), len(prob_array_list)])
             for i_class, prob_array in enumerate(prob_array_list):
                 for i_instance, row in enumerate(prob_array):
                     res[i_instance, i_class] = row[1]
@@ -489,9 +490,9 @@ class Train(object):
 
     def _cross_validate(self):
         """
-        If we are performing event-wise training, we need to return the metrics for each running (event)
+        If we are performing event-wise training, we need to return the metrics for each running (event).
         Note: If you want to get more balanced k-fold split, you can refer to `proba_mass_split` in utils.py,
-            or the `stratify_split` in utils.py which is implemented based on Sechidis et. al paper
+            or the `stratify_split` in utils.py which is implemented based on Sechidis et. al paper.
         :return:
         """
         print_to_log('Use {} fold cross validation'.format(self.args.cv_num))
@@ -533,10 +534,46 @@ class Train(object):
 
     def predict_on_test(self, test_data: np.ndarray):
         """
-        For ensemble purpose, each model predict on test data
-        Notice that for the event-wise model, we need to merge all predictions into a list to keep the original order,
+        Predict on test data and write to file, which can also be used for ensemble later.
+        Note that for the event-wise model, we need to merge all predictions into a list to keep the original order,
             which has been done in main.py
         :param test_data:
         :return:
         """
         return self._get_predict_score(test_data)
+
+
+class TrainRegression(object):
+    """ Train model for regression on priority score.
+
+    We make it as simple as possible, without caring about the event-wise.
+    It only supports the cross-validation (tune parameters), and train (get the score to override the submit file).
+    Note that data normalization has been (and should be) taken care in `preprocess` (`_read_feature_from_file`).
+    """
+
+    def __init__(self, args, data_x: np.ndarray, data_y: np.ndarray):
+        self.args = args
+        self.data_x = data_x
+        self.data_y = data_y
+        self.regressor = None
+
+    def _get_regressor(self, parameter=None):
+        regressor = Ridge(random_state=self.args.random_seed, **parameter)
+        return regressor
+
+    def cross_validate(self):
+        regressor = self._get_regressor()
+        param_dist = {'alpha': [0.1, 0.5, 0.7, 1.0, 2.0, 5.0], 'fit_intercept': [True, False]}
+        search = GridSearchCV(regressor, param_grid=param_dist, cv=5, verbose=10, scoring='neg_mean_squared_error')
+        search.fit(self.data_x, self.data_y)
+        print_to_log("Grid Search for Regression finished!")
+        print_to_log("best_score_:\n{}".format(search.best_score_))
+        print_to_log("best_params_:\n{}".format(search.best_params_))
+
+    def train(self):
+        """ Here we use the best parameter searched by cross_validate. """
+        self.regressor = self._get_regressor(parameter={'alpha': 5.0, 'fit_intercept': True})
+        self.regressor.fit(self.data_x, self.data_y)
+
+    def predict_on_test(self, test_data: np.ndarray):
+        return self.regressor.predict(test_data)

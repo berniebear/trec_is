@@ -27,7 +27,7 @@ class PostProcess(object):
     def __init__(self, args, label2id: Dict[str, int], id2label: List[str], class_weight: List[float],
                  majority_label: str, short2long_label: Dict[str, str],
                  formal_train_file: str, formal_2019_test_file: str,
-                 raw_tweets_json_folder: str):
+                 raw_tweets_json_folder: str, predict_priority_score_out_file: str):
         self.args = args
         self.label2id = label2id
         self.id2label = id2label
@@ -37,28 +37,35 @@ class PostProcess(object):
         self.formal_train_file = formal_train_file
         self.formal_2019_test_file = formal_2019_test_file
         self.raw_tweets_json_folder = raw_tweets_json_folder
-        self.postfix = '-event' if self.args.event_wise else ''
-        self.model_name = '{0}{1}'.format(self.args.model, self.postfix)
-        self.submission_folder = self._prepare_submission_folder()
-        self.submission_file = os.path.join(self.submission_folder, 'submission_{}'.format(self.model_name))
-        self.dev_label_file = os.path.join(self.args.ensemble_dir, 'dev_label.txt')
-        self.dev_predict_file = os.path.join(self.args.ensemble_dir, 'dev_predict_{}.txt'.format(self.model_name))
-        self.test_predict_file = os.path.join(self.args.ensemble_dir, 'test_predict_{}.txt'.format(self.model_name))
+        self.model_name = args.model_name
+        self.submission_file = args.submission_file
+        self.dev_label_file = args.dev_label_file
+        self.dev_predict_file = args.dev_predict_file
+        self.test_predict_file = args.test_predict_file
         self.tweetid2incidentid = self._get_tweetid_to_incidentid()
         self.test_predict = self._read_test_predict()
         self.test_tweetid_list = self._read_test_tweetid()
         self.incidentid_list = sorted(list(event2incidentid.values()))
+        self.tweetid2prioirty_score = self._get_tweetid2prioirty_score(
+            predict_priority_score_out_file) if args.train_regression else None
         assert len(self.test_predict) == len(self.test_tweetid_list)
 
-    def _prepare_submission_folder(self):
-        temp = self.args.pick_k if self.args.pick_criteria == 'top' else self.args.pick_threshold
-        if self.args.pick_criteria == 'autothre':
-            temp = None
-        submission_folder = 'submit-{0}-{1}'.format(self.args.pick_criteria, 'None' if temp is None else temp)
-        submission_folder = os.path.join(self.args.ensemble_dir, submission_folder)
-        if not os.path.isdir(submission_folder):
-            os.mkdir(submission_folder)
-        return submission_folder
+    def _get_tweetid2prioirty_score(self, priority_score_filepath):
+        """
+        Read the priority score from file. That is why we ask the user to run `--predict_mode` before run the
+        `--get_submission`, as the `--predict_mode` will writes the priority score into the file.
+
+        :param priority_score_filepath: The file contains the priority score predicted by our model, where each line
+                                        contains tweetid and its predicted priority score.
+        :return: A dict which maps from tweetid to the priority score.
+        """
+        tweetid2prioirty_score = dict()
+        with open(priority_score_filepath, 'r', encoding='utf8') as f:
+            for idx, line in enumerate(f):
+                score = float(line.strip())
+                tweetid2prioirty_score[self.test_tweetid_list[idx]] = score
+        assert idx + 1 == len(self.test_tweetid_list)
+        return tweetid2prioirty_score
 
     def _read_test_tweetid(self):
         tweetid_list = []
@@ -101,6 +108,10 @@ class PostProcess(object):
         return weighted_score
 
     def _get_tweetid_to_incidentid(self):
+        """
+        Get a map to convert from tweetid to incidentid, which can tell us each tweet belongs to which incident
+        (such as 'floodChoco2019').
+        """
         tweetid2incidentid = dict()
         data_folder = self.raw_tweets_json_folder
         filename_list = utils.get_2019_json_file_list(data_folder)
@@ -114,8 +125,43 @@ class PostProcess(object):
                     tweetid2incidentid[tweetid] = incidentid
         return tweetid2incidentid
 
+    def _get_priority_score(self, tweetid: str, predictions: List[int]):
+        """
+        A simple method is to choose how to get the score by a flag.
+        An advanced method is to merge those two scores.
+        """
+        # Simple method.
+        if self.args.train_regression:
+            return self._get_score_from_regression(tweetid)
+        else:
+            return self._get_score_of_predictions(predictions)
+
+        # Advanced method to merge two scores.
+        # score_from_prediction = self._get_score_of_predictions(predictions)
+        # score_from_regression = score_from_prediction
+        # if self.args.train_regression:
+        #     score_from_regression = self._get_score_from_regression(tweetid)
+        # weight = 0.5
+        # if score_from_prediction > 0.8:
+        #     score = score_from_prediction
+        # else:
+        #     score = score_from_prediction * weight + score_from_regression * (1.0 - weight)
+        # return score
+
     def _get_score_of_predictions(self, predictions: List[int]):
+        """
+        In 2019-A, we use a naive method to get the score, which is an average of the score assigned to each class.
+            It means the score is totally decided by the predicted classes.
+        In 2019-B, we decide to train a regression model for it, and scores for all tweetid has been written to file.
+        To make it compatible with the previous naive version, we use a flag to decide how to get the score.
+
+        :param predictions:
+        :return:
+        """
         return sum([self.class_weight[idx] for idx in predictions]) / len(predictions)
+
+    def _get_score_from_regression(self, tweetid):
+        return self.tweetid2prioirty_score[tweetid]
 
     def _get_predictions_str(self, predictions: List[int]):
         """
@@ -178,29 +224,7 @@ class PostProcess(object):
             threshold_list.append(best_threshold)
         return threshold_list
 
-    def pick_by_autothre(self):
-        """
-        For the autothre mode, we pick thresholds for each class separately, to make the weighted sum loss minimum.
-        :return:
-        """
-        self._read_dev_label_predict()
-        threshold_list = self._get_threshold_for_each_class()
-        incidentid2content_list = {incidentid: [] for incidentid in self.incidentid_list}
-        for i, predict_scores in enumerate(self.test_predict):
-            tweetid = self.test_tweetid_list[i]
-            incidentid = self.tweetid2incidentid[tweetid]
-            predictions = []
-            for idx, score in enumerate(predict_scores):
-                if score >= threshold_list[idx]:
-                    predictions.append(idx)
-            if len(predictions) == 0:
-                predictions.append(np.argmax(predict_scores))
-            line_contents = [tweetid, self._get_score_of_predictions(predictions), predictions]
-            incidentid2content_list[incidentid].append(line_contents)
-        print("The threshold for each class is: {}".format(threshold_list))
-        self._write_incidentid2content_list_to_file(incidentid2content_list)
-
-    def find_best_threshold(self) -> float:
+    def _find_best_threshold(self) -> float:
         self._read_dev_label_predict()
         best_threshold = 0.2
         best_score = 0.0
@@ -213,43 +237,72 @@ class PostProcess(object):
         print("After searching threshold in {0}, the best threshold is {1}".format(candidates, best_threshold))
         return best_threshold
 
-    def pick_by_threshold(self, threshold: float):
+    def pick_labels_and_write_final_result(self):
+        """
+        Pick labels by different strategies, and write the result to file in TREC format which could be submitted.
+        :return:
+        """
+        if self.args.pick_criteria == 'autothre':
+            self._read_dev_label_predict()
+            threshold_list = self._get_threshold_for_each_class()
+            print("Use auto threshold, the threshold for each class is: {}".format(threshold_list))
+        elif self.args.pick_criteria == 'threshold':
+            threshold = self._find_best_threshold() if self.args.pick_threshold is None else self.args.pick_threshold
+
+        incidentid2content_list = {incidentid: [] for incidentid in self.incidentid_list}
+        for i, predict_scores in enumerate(self.test_predict):
+            tweetid = self.test_tweetid_list[i]
+            incidentid = self.tweetid2incidentid[tweetid]
+
+            if self.args.pick_criteria == 'threshold':
+                predictions = PostProcess._pick_by_threshold(predict_scores, threshold)
+            elif self.args.pick_criteria == 'top':
+                predictions = PostProcess._pick_top_k(predict_scores, self.args.pick_k)
+            else:
+                assert self.args.pick_criteria == 'autothre'
+                predictions = PostProcess._pick_by_autothre(predict_scores, threshold_list)
+
+            line_contents = [tweetid, self._get_priority_score(tweetid, predictions), predictions]
+            incidentid2content_list[incidentid].append(line_contents)
+        self._write_incidentid2content_list_to_file(incidentid2content_list)
+
+    @staticmethod
+    def _pick_by_threshold(predict_scores, threshold):
         """
         Because we already have the confidence score for each class in a "One-vs-Rest" scheme, now we only need to
             determine the threshold and pick those classes above this threshold
         Notice that we want to make sure the submission file is ordered by incident id,
             and inner the incident id it is ranked by score predicted (as the sample shown on website)
-        :param threshold:
         :return:
         """
-        incidentid2content_list = {incidentid: [] for incidentid in self.incidentid_list}
-        for i, predict_scores in enumerate(self.test_predict):
-            tweetid = self.test_tweetid_list[i]
-            incidentid = self.tweetid2incidentid[tweetid]
-            predictions = []
-            for idx, score in enumerate(predict_scores):
-                if score >= threshold:
-                    predictions.append(idx)
-            if len(predictions) == 0:
-                predictions.append(np.argmax(predict_scores))
-            line_contents = [tweetid, self._get_score_of_predictions(predictions), predictions]
-            incidentid2content_list[incidentid].append(line_contents)
-        print("We pick the result by threshold {}".format(threshold))
-        self._write_incidentid2content_list_to_file(incidentid2content_list)
+        predictions = []
+        for idx, score in enumerate(predict_scores):
+            if score >= threshold:
+                predictions.append(idx)
+        if len(predictions) == 0:
+            predictions.append(np.argmax(predict_scores))
+        return predictions
 
-    def pick_top_k(self, k: int):
+    @staticmethod
+    def _pick_top_k(predict_scores, k: int):
         """
         Because the threshold may be difficult to determine, we can use the top k classes with highest confidence as
             the output. The k had better smaller than 4.
         :param k:
         :return:
         """
-        incidentid2content_list = {incidentid: [] for incidentid in self.incidentid_list}
-        for i, predict_scores in enumerate(self.test_predict):
-            tweetid = self.test_tweetid_list[i]
-            incidentid = self.tweetid2incidentid[tweetid]
-            predictions = np.asarray(predict_scores).argsort()[-k:][::-1].tolist()
-            line_contents = [tweetid, self._get_score_of_predictions(predictions), predictions]
-            incidentid2content_list[incidentid].append(line_contents)
-        print("We pick the result by top {}".format(k))
-        self._write_incidentid2content_list_to_file(incidentid2content_list)
+        predictions = np.asarray(predict_scores).argsort()[-k:][::-1].tolist()
+        return predictions
+
+    @staticmethod
+    def _pick_by_autothre(predict_scores, threshold_list):
+        """
+        For the autothre mode, we pick thresholds for each class separately, to make the weighted sum loss minimum.
+        """
+        predictions = []
+        for idx, score in enumerate(predict_scores):
+            if score >= threshold_list[idx]:
+                predictions.append(idx)
+        if len(predictions) == 0:
+            predictions.append(np.argmax(predict_scores))
+        return predictions

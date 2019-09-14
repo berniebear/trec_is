@@ -102,13 +102,23 @@ def prepare_folders(args):
         os.mkdir(args.ensemble_dir)
 
 
+def prepare_submission_folder(args):
+    temp = args.pick_k if args.pick_criteria == 'top' else args.pick_threshold
+    if args.pick_criteria == 'autothre':
+        temp = None
+    submission_folder = 'submit-{0}-{1}'.format(args.pick_criteria, 'None' if temp is None else temp)
+    submission_folder = os.path.join(args.ensemble_dir, submission_folder)
+    if not os.path.isdir(submission_folder):
+        os.mkdir(submission_folder)
+    return submission_folder
+
+
 def check_args_conflict(args):
     """
     Because some arguments cannot be set to True or False together
     :param args:
     :return:
     """
-    assert args.cross_validate is True, "Current code focus on cross validation on 2018-train + 2018-test"
     assert args.late_fusion is False, "To make the code easier to modify, we don't support late-fusion any more"
     assert args.train_on_small is False, "This function is deprecated"
     if args.event_wise or args.train_on_small:
@@ -120,13 +130,14 @@ def check_args_conflict(args):
         assert args.search_best_parameters is False
         assert args.train_on_small is False
     if args.search_best_parameters:
-        assert args.event_wise is False, "Current model doesn't support search best parameter for event-wise model" \
-                                         "We recommend to search parameter for general model and direct apply event-wise"
+        assert args.event_wise is False, "Current model doesn't support search best parameter for event-wise model." \
+                                         "We recommend to search parameter for general model and " \
+                                         "directly apply the event-wise setting with the best parameter."
     if args.class_weight_scheme == 'customize':
         assert args.model == 'rf', "We only support random forest for customized weight"
 
 
-def get_class_weight(label2id: Dict[str, int], id2label: List[str], formal_train_file: str) -> List[float]:
+def get_class_weight(args, label2id: Dict[str, int], id2label: List[str], formal_train_file: str) -> List[float]:
     """
     As the host says they will pay more attention to the "important" classes, we want to calculate the weight
         according to training file.
@@ -156,10 +167,12 @@ def get_class_weight(label2id: Dict[str, int], id2label: List[str], formal_train
     # Some informative classes are more important
     for category in informative_categories:
         class_weight[label2id[category]] = min(class_weight[label2id[category]] + 0.2, 1.0)
-    print("There are {0} lines have 'Unknown' as priority, just ignored them".format(priority_unk_count))
-    print("After calculating class weight, the new weight is:")
-    for i_label in np.argsort(class_weight)[::-1]:
-        print("{0}: {1}".format(id2label[i_label], class_weight[i_label]))
+    if args.class_weight_scheme == 'customize':
+        print("Use customized weight, which gives more weights to the actionable class.")
+        print("There are {0} lines have 'Unknown' as priority, just ignored them".format(priority_unk_count))
+        print("After calculating class weight, the new weight is:")
+        for i_label in np.argsort(class_weight)[::-1]:
+            print("{0}: {1}".format(id2label[i_label], class_weight[i_label]))
     return class_weight
 
 
@@ -175,9 +188,8 @@ def write_predict_and_label(args, formal_train_file: str, label2id: Dict[str, in
         and dev predict (the probability score per line) to the file.
     :return:
     """
-    dev_label_file = os.path.join(args.ensemble_dir, 'dev_label.txt')
-    dev_predict_file = os.path.join(args.ensemble_dir, 'dev_predict_{0}{1}.txt'.format(
-        args.model, '-event' if args.event_wise else ''))
+    dev_label_file = args.dev_label_file
+    dev_predict_file = args.dev_predict_file
 
     # Write the dev label file according to formal_train_file
     fout = open(dev_label_file, 'w', encoding='utf8')
@@ -196,13 +208,29 @@ def write_predict_and_label(args, formal_train_file: str, label2id: Dict[str, in
         dev_label_file, dev_predict_file))
 
 
+def write_predict_score_to_file(scores, file):
+    """
+    Note that all writing logic in this program is only writing the value, without corresponding tweetid, because
+    the order of the tweetid is fixed, which can be read from the file (like `formal_2019_test_file`).
+    So, a signicant thing is to avoid any shuffle in the whole process.
+    """
+    with open(file, 'w', encoding='utf8') as f:
+        for score in scores:
+            f.write('{}\n'.format(score))
+    print("The predict priority score for test data has been written to {}".format(file))
+
+
 def write_predict_res_to_file(args, test_predict_collect):
-    test_predict_file = os.path.join(args.ensemble_dir, 'test_predict_{0}{1}.txt'.format(
-        args.model, '-event' if args.event_wise else ''))
-    with open(test_predict_file, 'w', encoding="utf8") as f:
+    """
+    Write the predict scores for each test data (each row represent a data) to the file.
+    :param args: Config arguments that contains the `test_predict_file` which specifies the output file.
+    :param test_predict_collect: An ndarray with size [num_instance, num_class].
+    :return:
+    """
+    with open(args.test_predict_file, 'w', encoding="utf8") as f:
         for row in test_predict_collect:
             f.write('{}\n'.format(' '.join(list(map(str, row)))))
-    print("The test predict has been written to {0}".format(test_predict_file))
+    print("The test predict has been written to {0}".format(args.test_predict_file))
 
 
 def get_predict_file_list(ensemble_dir, prefix):
@@ -465,11 +493,11 @@ def write_tweet_and_ids(tweetid_list: List[str], tweet_content_list: List[dict],
 
 def get_label2id(label_file: str, train_file: str, threshold: int):
     """
-    Because the original labels are in the form of text, such as "MultimediaShare" and so on
-    We want to convert those textual labels to digital labels
+    Because the original labels are in the form of text, such as "MultimediaShare" and so on.
+    We want to convert those textual labels to digital labels.
     :param label_file: All types of labels provided by TREC, including explanation of each type of label
     :param train_file: Formalized train file, where each line is "{tweetid}\t{labels}\t{Priority}\t{EventType}\n"
-    :param threshold:
+    :param threshold: If the appearance number of a label is smaller than the threshold, it will be filtered out.
     :return:
         label2id: the dict to convert labels to id
         majority_label: the majority label, used when the tweet contents cannot be accessed
@@ -514,7 +542,7 @@ def get_label2id(label_file: str, train_file: str, threshold: int):
         else:
             label2id[label] = len(label2id)
     print_to_log("With threshold {0}, those labels are filtered out: {1}".format(threshold, removed_labels))
-    assert len(removed_labels) == 0, "In our current setting, there should be no label removed"
+    assert len(removed_labels) == 0, "In our current setting, there should be no label removed."
 
     return label2id, majority_label, short2long_label
 

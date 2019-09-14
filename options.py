@@ -37,6 +37,9 @@ def get_arguments():
                              "Can choose from voting | svm_linear | svm_rbf | logistic_reg")
     parser.add_argument("--force_retrain", action="store_true",
                         help="force to retrain the model on 2018 data")
+    # Regression for priority score
+    parser.add_argument("--train_regression", action="store_true",
+                        help="Train regressor on the priority score, and override the score for the final submission.")
     # Data path
     parser.add_argument("--out_dir", type=str, default='out',
                         help="Directory contains the output things, including the log and ckpt")

@@ -35,6 +35,8 @@ class Preprocess(object):
         self.feature_collection = []
         self.feature_used = ['hand_crafted', 'fasttext-avg', 'skip-thought', 'bert-avg-1', 'bert-CLS-1',
                              'glove-tfidf', 'fasttext-crawl']
+        # Convert the priority label to score which will be used to train regression model.
+        self.priority2score = {'Low': 0.25, 'Medium': 0.5, 'High': 0.75, 'Critical': 1.0, 'Unknown': 0.5}
         utils.print_to_log("The feature used is {}".format(self.feature_used))
 
     def _collect_feature(self, feature, feat_name):
@@ -78,8 +80,8 @@ class Preprocess(object):
         hand_crafted_feature, clean_texts = utils.extract_hand_crafted_feature(self.tweet_content_list)
         if "cbnu_user_feature" in self.feature_used:
             # read annotated user type from external file
-            annotated_user = os.path.join(self.args.data_dir, 'freq_users.txt') #unsafe operation
-            self.annotated_user_type = {} ### change here
+            annotated_user = os.path.join(self.args.data_dir, 'freq_users.txt')
+            self.annotated_user_type = {}
             for line in open(annotated_user):
                 id_str, user_type = line.strip().split('\t')
                 self.annotated_user_type[id_str] = user_type
@@ -105,8 +107,43 @@ class Preprocess(object):
         for i, tweetid in enumerate(self.tweetid_list):
             self.tweetid2feature[tweetid] = whole_feature_matrix[i]
 
-    def extract_train_data(self, train_file):
-        return self._extract_data_from_formalized_file_v2(train_file)
+    def extract_train_data(self, train_file, get_score=False):
+        """
+        The original design is aiming at extracting the class label. However, as we need to also train the regression
+        model on the score, we add a flag 'get_score' which by default compatible with original code.
+
+        :param train_file: File to extract information.
+        :param get_score: If False, extract the class; If True, extract the priority score for regression.
+        :return:
+        """
+        if get_score:
+            return self._extract_score_from_formalized_file(train_file)
+        else:
+            return self._extract_data_from_formalized_file_v2(train_file)
+
+    def _extract_score_from_formalized_file(self, filename: str):
+        """
+        For extracting score, we currently doesn't support event_wise.
+        All other things are similar to `_extract_data_from_formalized_file_v2`.
+
+        :param filename: File to extract information.
+        :return:
+        """
+        data_x, data_y = [], []
+        count_unk = 0
+        with open(filename, 'r', encoding='utf8') as f:
+            for idx, line in enumerate(f):
+                line = line.strip().split('\t')
+                tweetid = line[0]
+                priority_label = line[2]
+                if priority_label == 'Unknown':
+                    count_unk += 1
+                score = self.priority2score[line[2]]
+                feature = self.tweetid2feature[tweetid]
+                data_x.append(feature)
+                data_y.append(score)
+        utils.print_to_log("There are {} Unknown priority labels.".format(count_unk))
+        return np.asarray(data_x), np.asarray(data_y)
 
     def _extract_data_from_formalized_file_v2(self, filename: str):
         """
@@ -114,8 +151,9 @@ class Preprocess(object):
             If you want to deal with missing tweets, please refer to `_extract_data_from_formalized_file_v1`
         Extract data in the form of multi-label, where we treat each "tweet" as a training instance, and the label is
             recorded as a list (such as data_x = [tweetid_1_feature, tweetid_2_feature], data_y = [[0, 2, 5], [1, 5]])
-        Notice that if event_wise is True, we store data_x and data_y for each event separately
-        :param filename:
+        Notice that if event_wise is True, we store data_x and data_y for each event separately.
+
+        :param filename: File to extract information.
         :return:
         """
         if self.args.event_wise:
@@ -169,10 +207,8 @@ class Preprocess(object):
                 line = line.strip().split('\t')
                 tweetid = line[0]
                 event_type = line[3]
-                if self.args.cross_validate:  # The 2018train + 2018test data will not filter out any label
-                    categories = [self.label2id[label] for label in line[1].split(',')]
-                else:
-                    categories = [self.label2id[label] for label in line[1].split(',') if label in self.label2id]
+                # The 2018train + 2018test data will not filter out any label
+                categories = [self.label2id[label] for label in line[1].split(',')]
                 count_total += 1
                 if tweetid in self.tweetid2feature:
                     feature = self.tweetid2feature[tweetid]
