@@ -66,6 +66,9 @@ def get_arguments():
                         help="bernoulli_nb | rf | sgd_svm | svm_linear | xgboost")
     parser.add_argument("--class_weight_scheme", type=str, default='balanced', choices=['balanced', 'customize'],
                         help="balanced | customize, if set to customize, we use the weight calculated by training file")
+    parser.add_argument("--additional_weight", type=float, default=0.2,
+                        help="Additional weights added to the actionable classes (defined by official host), and"
+                             "it is only used when class_weight_scheme=customize.")
     parser.add_argument("--cv_num", type=int, default=5,
                         help="The n-fold cross-validation")
     parser.add_argument("--n_jobs", type=int, default=4,

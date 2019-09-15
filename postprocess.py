@@ -32,6 +32,7 @@ class PostProcess(object):
         self.label2id = label2id
         self.id2label = id2label
         self.class_weight = class_weight
+        self.capped_class_weight = [min(weight, 1.0) for weight in class_weight]
         self.majority_label = majority_label
         self.short2long_label = short2long_label
         self.formal_train_file = formal_train_file
@@ -131,22 +132,24 @@ class PostProcess(object):
         An advanced method is to merge those two scores.
         """
         # Simple method.
-        if self.args.train_regression:
-            return self._get_score_from_regression(tweetid)
-        else:
-            return self._get_score_of_predictions(predictions)
+        # if self.args.train_regression:
+        #     return self._get_score_from_regression(tweetid)
+        # else:
+        #     return self._get_score_of_predictions(predictions)
 
         # Advanced method to merge two scores.
-        # score_from_prediction = self._get_score_of_predictions(predictions)
-        # score_from_regression = score_from_prediction
-        # if self.args.train_regression:
-        #     score_from_regression = self._get_score_from_regression(tweetid)
-        # weight = 0.5
-        # if score_from_prediction > 0.8:
-        #     score = score_from_prediction
-        # else:
-        #     score = score_from_prediction * weight + score_from_regression * (1.0 - weight)
-        # return score
+        score_from_prediction = self._get_score_of_predictions(predictions)
+        if self.args.train_regression:
+            score_from_regression = self._get_score_from_regression(tweetid)
+        else:
+            score_from_regression = score_from_prediction
+        predict_weight = 0.0
+        # When the additional_weight is large, it is very easy for score_from_prediction to be large.
+        if score_from_prediction > 0.7 + self.args.additional_weight / 2:
+            score = score_from_prediction
+        else:
+            score = score_from_prediction * predict_weight + score_from_regression * (1.0 - predict_weight)
+        return min(score, 1.0)
 
     def _get_score_of_predictions(self, predictions: List[int]):
         """

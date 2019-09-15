@@ -166,7 +166,8 @@ def get_class_weight(args, label2id: Dict[str, int], id2label: List[str], formal
         class_weight[i] = class_sum_score[i] / class_count[i]
     # Some informative classes are more important
     for category in informative_categories:
-        class_weight[label2id[category]] = min(class_weight[label2id[category]] + 0.2, 1.0)
+        # There is no requirements that the element in class_weight need to be smaller than 1.0.
+        class_weight[label2id[category]] = class_weight[label2id[category]] + args.additional_weight
     if args.class_weight_scheme == 'customize':
         print("Use customized weight, which gives more weights to the actionable class.")
         print("There are {0} lines have 'Unknown' as priority, just ignored them".format(priority_unk_count))

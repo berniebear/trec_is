@@ -69,6 +69,7 @@ class Train(object):
         model_save_name = '{0}_{1}.pkl'.format(self.args.model, custom_postfix)
         ckpt_file = os.path.join(self.args.model_dir, model_save_name)
         if os.path.isfile(ckpt_file) and not self.args.force_retrain:
+            print_to_log("The ckpt file exists, and force_retrain is not set, so load model from {}".format(ckpt_file))
             with open(ckpt_file, 'rb') as f:
                 self.clf = pickle.load(f)
         else:

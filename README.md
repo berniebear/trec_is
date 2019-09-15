@@ -305,10 +305,46 @@ When we implement the stratified K-fold based on a paper published on 2011, the 
 It means the stratified method is really better than K-folder, but the difference is not so obvious.
 
 ## 2019-B Todo
-
 - Adjust parameters for type classification according to the new evaluation script.
 For example, use class_weight_scheme == 'customize' which gives more weights to actionable classes.
+And the additional weights added in the customized class weights could also be tuned.
 - [done] Regression to get priority score.
+- Classification to get priority score (give more weights to the high priority).
+- Run the feature extraction tools again on all data (including 2019-B) and predict.
+
+** Some Experimental Results **
+Use random forest (customized weight).
+
+When >0.7 copy class score, otherwise average regression score and class score (already better than most teams).
+```
+Priority Estimation Error (mean squared error, macro): 0.06123941348506185
+Priority Estimation Error High Importance (mean squared error, macro): 0.1381861719212382
+```
+
+When >0.7 copy class score, otherwise use regression score (almost the best among all teams).
+```
+Priority Estimation Error (mean squared error, macro): 0.053614565907744216
+Priority Estimation Error High Importance (mean squared error, macro): 0.105253727545082
+```
+
+When only use the class score (Simple method), and set additional_weight to 1.0 (quite good in all aspects)
+However, it actually has a bug, which is that some scores in submission file is larger than 1.0, and it "fools" the evaluation script.
+```
+High Importance Alert Worth: -0.16628242074927946
+Accumulated Alert Worth: -0.2589881529385931
+Information Type F1 (positive class, multi-type, macro): 0.1153338898176881
+High Importance Information Type F1 (positive class, multi-type, macro): 0.057893041357435455
+Priority Estimation Error (mean squared error, macro): 0.0848325638255392
+Priority Estimation Error High Importance (mean squared error, macro): 0.14055919115397889
+```
+
+When set additional_weight to 1.0, --train_regression
+```
+High Importance Alert Worth: -0.9230547550432279
+Accumulated Alert Worth: -0.470109165374908
+Priority Estimation Error (mean squared error, macro): 0.07529813107453287
+Priority Estimation Error High Importance (mean squared error, macro): 0.1478957047061434
+```
 
 ## 2019-A Todo
 - Submit four models: class_weight_scheme balanced/customize + pick up threshold / top 2
