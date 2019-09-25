@@ -21,6 +21,9 @@ def main():
     args.model_dir = os.path.join(args.out_dir, 'ckpt-{}'.format(args.class_weight_scheme))
     args.log_dir = os.path.join(args.out_dir, 'log')
     args.ensemble_dir = os.path.join(args.out_dir, 'ensemble-{}'.format(args.class_weight_scheme))
+    if args.class_weight_scheme == 'customize':
+        args.model_dir = os.path.join(args.model_dir, 'weight{}'.format(args.additional_weight))
+        args.ensemble_dir = os.path.join(args.ensemble_dir, 'weight{}'.format(args.additional_weight))
     prepare_folders(args)
     logger = set_logging(args)
     logger.info("Here is the arguments of this running:")
@@ -28,21 +31,24 @@ def main():
     utils.check_args_conflict(args)
 
     # Set files which contain data for training and test.
-    label_file = os.path.join(args.data_dir, 'ITR-H.types.v2.json')
+    # Note that for 2019-B submission, all '2019' means '2019-B' and '2018' means '2018 + 2019-A'
+    label_file = os.path.join(args.data_dir, 'ITR-H.types.v4.json')
     tweet_file_list = [os.path.join(args.data_dir, 'all-tweets.txt')]
     tweet_file_list_2019 = [os.path.join(args.data_dir, 'all-tweets-2019.txt')]
-    train_file = os.path.join(args.data_dir, 'TRECIS-CTIT-H-Training.json')
-    test_label_file_list = [os.path.join(args.data_dir, 'TRECIS-2018-TestEvents-Labels', 'assr{}.test'.format(i)) for i in range(1, 7)]
-    formal_train_file = os.path.join(args.data_dir, '2018-train.txt')
-    formal_test_file = os.path.join(args.data_dir, '2018-test.txt')
-    formal_merge_file = os.path.join(args.data_dir, '2018-all.txt')
-    formal_2019_test_file = os.path.join(args.data_dir, '2019-test.txt')
+    train_file_list = [os.path.join(args.data_dir, 'TRECIS-CTIT-H-Training.json')]
+    train_file_list += [os.path.join(args.data_dir, 'TRECIS-2018-TestEvents-Labels',
+                                     'assr{}.test'.format(i)) for i in range(1, 7)]
+    train_file_list += [os.path.join(args.data_dir, '2019ALabels', '2019A-assr{}.json'.format(i)) for i in range(1, 6)]
+    train_file_list += [os.path.join(args.data_dir, '2019ALabels', '2019-assr2.json')]
+    test_raw_tweets_json_folder = 'download_tweets'
+    # Some output files which has been formalized for further usages.
+    formal_train_file = os.path.join(args.data_dir, 'train.txt')
+    formal_test_file = os.path.join(args.data_dir, 'test.txt')
     tweet_text_out_file = os.path.join(args.out_dir, 'tweets-clean-text.txt')
     tweet_id_out_file = os.path.join(args.out_dir, 'tweets-id.txt')
     tweet_text_out_file_2019 = os.path.join(args.out_dir, 'tweets-clean-text-2019.txt')
     tweet_id_out_file_2019 = os.path.join(args.out_dir, 'tweets-id-2019.txt')
     predict_priority_score_out_file = os.path.join(args.out_dir, 'predict_priority_score.txt')
-    raw_tweets_json_folder = 'download_tweets'
 
     # Set files for submission.
     args.model_name = '{0}{1}'.format(args.model, '-event' if args.event_wise else '')
@@ -53,13 +59,10 @@ def main():
     args.submission_file = os.path.join(args.submission_folder, 'submission_{}'.format(args.model_name))
 
     # As the original files provided by TREC is quite messy, we formalize them into train and test file.
-    utils.formalize_train_file(train_file, formal_train_file)
-    utils.formalize_test_file(test_label_file_list, formal_test_file)
-    utils.formalize_2019_test_file(raw_tweets_json_folder, formal_2019_test_file)
-    # In all following experiments we use the full data of 2018 as training data.
-    utils.merge_files([formal_train_file, formal_test_file], formal_merge_file)
-    formal_train_file = formal_merge_file
-    logger.info("Use full-data of 2018, and the training data file is {}".format(formal_train_file))
+    utils.formalize_files(train_file_list, formal_train_file)
+    utils.formalize_test_file(test_raw_tweets_json_folder, formal_test_file, prefix="trecis2019-B")
+    logger.info("The training data file is {0} and testing data file is {1}".format(
+        formal_train_file, formal_test_file))
 
     # Step0. Extract some info which can be used later (also useful for generating submission files).
     label2id, majority_label, short2long_label = utils.get_label2id(label_file, formal_train_file, args.cv_num)
@@ -71,7 +74,7 @@ def main():
     # So you MUST run `--predict_mode` in advance to get the `test_predict_file` prepared.
     if args.get_submission:
         postpro = PostProcess(args, label2id, id2label, class_weight, majority_label, short2long_label,
-                              formal_train_file, formal_2019_test_file, raw_tweets_json_folder,
+                              formal_train_file, formal_test_file, test_raw_tweets_json_folder,
                               predict_priority_score_out_file)
         postpro.pick_labels_and_write_final_result()
         quit()
@@ -82,6 +85,8 @@ def main():
     tweetid_list_2019, tweet_content_list_2019 = utils.get_tweetid_content(tweet_file_list_2019)
     utils.write_tweet_and_ids(tweetid_list_2019, tweet_content_list_2019, tweet_text_out_file_2019,
                               tweet_id_out_file_2019)
+    # Note that before `extract_features()`, we should manually run the `extract_features.sh` in `feature_tools`.
+    # quit()  # The `extract_features.sh` only need to be run once for the same dataset.
     preprocess = Preprocess(args, tweetid_list, tweet_content_list, label2id, tweet_id_out_file)
     preprocess.extract_features()
     preprocess_2019 = Preprocess(args, tweetid_list_2019, tweet_content_list_2019, label2id,
@@ -124,7 +129,7 @@ def main():
         # Step3. Get the 2019 test data, and retrain the model on all training data, then predict on the 2019-test
         if args.event_wise:
             data_x, data_y, _, _ = preprocess.extract_train_data(formal_train_file)
-            test_x, event2idx_list, line_num = preprocess_2019.extract_formalized_test_data(formal_2019_test_file)
+            test_x, event2idx_list, line_num = preprocess_2019.extract_formalized_test_data(formal_test_file)
             test_predict_collect = np.zeros([line_num, len(label2id)])
             for event_type in utils.idx2event_type:
                 it_data_x, it_data_y, it_test_x = data_x[event_type], data_y[event_type], test_x[event_type]
@@ -139,14 +144,14 @@ def main():
                     test_predict_collect[idx] = predict_score[i]
         else:
             data_x, data_y = preprocess.extract_train_data(formal_train_file)
-            test_x = preprocess_2019.extract_formalized_test_data(formal_2019_test_file)
+            test_x = preprocess_2019.extract_formalized_test_data(formal_test_file)
             train = Train(args, data_x, data_y, id2label, preprocess_2019.feature_len, class_weight)
             train.train_on_all()
             test_predict_collect = train.predict_on_test(test_x)
         utils.write_predict_res_to_file(args, test_predict_collect)
 
         if args.train_regression:
-            test_x = preprocess_2019.extract_formalized_test_data(formal_2019_test_file)
+            test_x = preprocess_2019.extract_formalized_test_data(formal_test_file)
             if args.event_wise:
                 # For event_wise setting, there will be many additional things extracted, what we need is only test_x.
                 test_x = test_x[0]

@@ -5,18 +5,27 @@ import numpy as np
 
 import utils
 
-event2incidentid = {'floodChoco2019': 'TRECIS-CTIT-H-Test-022',
-                    'fireAndover2019': 'TRECIS-CTIT-H-Test-023',
-                    'earthquakeCalifornia2014': 'TRECIS-CTIT-H-Test-024',
-                    'earthquakeBohol2013': 'TRECIS-CTIT-H-Test-025',
-                    'hurricaneFlorence2018': 'TRECIS-CTIT-H-Test-026',
-                    'shootingDallas2017': 'TRECIS-CTIT-H-Test-027',
-                    'fireYMM2016': 'TRECIS-CTIT-H-Test-028'}
+# For 2019-A test events.
+# event2incidentid = {'floodChoco2019': 'TRECIS-CTIT-H-Test-022',
+#                     'fireAndover2019': 'TRECIS-CTIT-H-Test-023',
+#                     'earthquakeCalifornia2014': 'TRECIS-CTIT-H-Test-024',
+#                     'earthquakeBohol2013': 'TRECIS-CTIT-H-Test-025',
+#                     'hurricaneFlorence2018': 'TRECIS-CTIT-H-Test-026',
+#                     'shootingDallas2017': 'TRECIS-CTIT-H-Test-027',
+#                     'fireYMM2016': 'TRECIS-CTIT-H-Test-028'}
 
-old2new = {'Other-PastNews': 'Other-ContextualInformation',
-           'Other-ContinuingNews': 'Report-News',
-           'Other-KnownAlready': 'Report-OriginalEvent',
-           'Report-SignificantEventChange': 'Report-NewSubEvent'}
+# For 2019-B test events.
+event2incidentid = {'albertaWildfires2019': 'TRECIS-CTIT-H-Test-029',
+                    'cycloneKenneth2019': 'TRECIS-CTIT-H-Test-030',
+                    'philippinesEarthquake2019': 'TRECIS-CTIT-H-Test-031',
+                    'coloradoStemShooting2019': 'TRECIS-CTIT-H-Test-032',
+                    'southAfricaFloods2019': 'TRECIS-CTIT-H-Test-033',
+                    'sandiegoSynagogueShooting2019': 'TRECIS-CTIT-H-Test-034'}
+
+# old2new = {'Other-PastNews': 'Other-ContextualInformation',
+#            'Other-ContinuingNews': 'Report-News',
+#            'Other-KnownAlready': 'Report-OriginalEvent',
+#            'Report-SignificantEventChange': 'Report-NewSubEvent'}
 
 
 class PostProcess(object):
@@ -26,7 +35,7 @@ class PostProcess(object):
     """
     def __init__(self, args, label2id: Dict[str, int], id2label: List[str], class_weight: List[float],
                  majority_label: str, short2long_label: Dict[str, str],
-                 formal_train_file: str, formal_2019_test_file: str,
+                 formal_train_file: str, formal_test_file: str,
                  raw_tweets_json_folder: str, predict_priority_score_out_file: str):
         self.args = args
         self.label2id = label2id
@@ -36,7 +45,7 @@ class PostProcess(object):
         self.majority_label = majority_label
         self.short2long_label = short2long_label
         self.formal_train_file = formal_train_file
-        self.formal_2019_test_file = formal_2019_test_file
+        self.formal_test_file = formal_test_file
         self.raw_tweets_json_folder = raw_tweets_json_folder
         self.model_name = args.model_name
         self.submission_file = args.submission_file
@@ -70,7 +79,7 @@ class PostProcess(object):
 
     def _read_test_tweetid(self):
         tweetid_list = []
-        with open(self.formal_2019_test_file, 'r', encoding='utf8') as f:
+        with open(self.formal_test_file, 'r', encoding='utf8') as f:
             for line in f:
                 tweetid_list.append(line.strip().split('\t')[0])
         return tweetid_list
@@ -115,7 +124,7 @@ class PostProcess(object):
         """
         tweetid2incidentid = dict()
         data_folder = self.raw_tweets_json_folder
-        filename_list = utils.get_2019_json_file_list(data_folder)
+        filename_list = utils.get_2019_json_file_list(data_folder, prefix="trecis2019-B")
         for filename in filename_list:
             eventid = filename.split('.')[1]
             incidentid = event2incidentid[eventid]
@@ -131,25 +140,22 @@ class PostProcess(object):
         A simple method is to choose how to get the score by a flag.
         An advanced method is to merge those two scores.
         """
-        # Simple method.
-        # if self.args.train_regression:
-        #     return self._get_score_from_regression(tweetid)
-        # else:
-        #     return self._get_score_of_predictions(predictions)
-
-        # Advanced method to merge two scores.
-        score_from_prediction = self._get_score_of_predictions(predictions)
-        if self.args.train_regression:
+        if self.args.merge_priority_score == 'simple':
+            if self.args.train_regression:
+                return self._get_score_from_regression(tweetid)
+            else:
+                return self._get_score_of_predictions(predictions)
+        else:
+            # Advanced method to merge two scores.
+            score_from_prediction = self._get_score_of_predictions(predictions)
             score_from_regression = self._get_score_from_regression(tweetid)
-        else:
-            score_from_regression = score_from_prediction
-        predict_weight = 0.0
-        # When the additional_weight is large, it is very easy for score_from_prediction to be large.
-        if score_from_prediction > 0.7 + self.args.additional_weight / 2:
-            score = score_from_prediction
-        else:
-            score = score_from_prediction * predict_weight + score_from_regression * (1.0 - predict_weight)
-        return min(score, 1.0)
+            predict_weight = self.args.advanced_predict_weight
+            # When the additional_weight is large, it is very easy for score_from_prediction to be large.
+            if score_from_prediction > 0.7 + self.args.additional_weight / 2:
+                score = score_from_prediction
+            else:
+                score = score_from_prediction * predict_weight + score_from_regression * (1.0 - predict_weight)
+            return min(score, 1.0)
 
     def _get_score_of_predictions(self, predictions: List[int]):
         """
@@ -170,42 +176,30 @@ class PostProcess(object):
         """
         Notice some labels are changed in 2019, so we need to convert them. The details could be found on
             http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html
-        And to get the same format ["AAA","BBB"] as shown in the sample, we need to do some string format operations
+        And to get the same format ["AAA","BBB"] as shown in the sample, we need to do some string format operations.
+        After V2 version (ITR-H.types.v2.json), the 'Unknown' label is removed, so we also didn't predict it.
         :param predictions:
         :return:
         """
-        count_unk, count_modify = 0, 0
         majority_long_label = self.short2long_label[self.majority_label]
         predictions_str = [self.id2label[predict] for predict in predictions]
         predictions_str = [self.short2long_label[predict_str] for predict_str in predictions_str]
         for i, predict_str in enumerate(predictions_str):
             if predict_str == 'Other-Unknown':
-                count_unk += 1
                 predict_str = majority_long_label
-            for old_label, new_label in old2new.items():
-                if predict_str == old_label:
-                    count_modify += 1
-                    predict_str = new_label
-                    break
             predictions_str[i] = predict_str
         predictions_str = ['"{}"'.format(predict_str) for predict_str in predictions_str]
-        return '[{}]'.format(','.join(predictions_str)), count_unk, count_modify
+        return '[{}]'.format(','.join(predictions_str))
 
     def _write_incidentid2content_list_to_file(self, incidentid2content_list):
-        count_unk, count_modify = 0, 0
         with open(self.submission_file, 'w', encoding='utf8') as f:
             for incidentid in self.incidentid_list:
                 content_list = incidentid2content_list[incidentid]
                 content_list = sorted(content_list, key=lambda x: x[1], reverse=True)
                 for i, content in enumerate(content_list):
-                    predict_str, temp_count_unk, temp_count_modify = self._get_predictions_str(content[2])
-                    count_unk += temp_count_unk
-                    count_modify += temp_count_modify
+                    predict_str = self._get_predictions_str(content[2])
                     f.write("{0}\tQ0\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(incidentid, content[0], i+1, content[1],
                                                                         predict_str, self.model_name))
-        print("In predictions, there are {0} old labels been converted to new, "
-              "and {1} Unknown and we use {2} to replace them".format(count_modify, count_unk,
-                                                                      self.short2long_label[self.majority_label]))
         print("The final submission result has been written to {}".format(self.submission_file))
 
     def _get_threshold_for_each_class(self) -> List[float]:

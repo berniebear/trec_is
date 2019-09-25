@@ -40,6 +40,11 @@ def get_arguments():
     # Regression for priority score
     parser.add_argument("--train_regression", action="store_true",
                         help="Train regressor on the priority score, and override the score for the final submission.")
+    parser.add_argument("--merge_priority_score", type=str, default='simple',
+                        help="simple | advanced, simple means use all regression or use all score from class prediction"
+                        " and advanced means merging those two sources by some weights.")
+    parser.add_argument("--advanced_predict_weight", type=float, default=0.5,
+                        help="The weight to merge prediction and regression result in the advanced method.")
     # Data path
     parser.add_argument("--out_dir", type=str, default='out',
                         help="Directory contains the output things, including the log and ckpt")

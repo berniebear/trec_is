@@ -234,9 +234,9 @@ class Preprocess(object):
     def extract_formalized_test_data(self, test_file: str):
         """
         Notice that here the test file should be the formalized file, as the format of training data
-            but the label could be some fake labels (because we don't have label for 2019-test data)
+            but the label could be some fake labels (because we don't have label for the test data).
         Another thing worth to mention is we don't check if the tweet is in self.tweetid2feature, because
-            we assume all tweets provided as 2019-test data should have its content also provided
+            we assume all tweets provided as the test data should have its content also provided.
         :param test_file:
         :return: If event-wise, we need to return the idx_list for each event,
                     as well as the number of lines in the file

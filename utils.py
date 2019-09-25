@@ -43,19 +43,32 @@ event2type = {'costaRicaEarthquake2012': 'earthquake',
               'typhoonHagupit2014': 'typhoon',
               'nepalEarthquake2015': 'earthquake',
               'flSchoolShooting2018': 'shooting',
-              'parisAttacks2015': 'boombing',  # The following seven lines is for 2019-A
+              'parisAttacks2015': 'boombing',  # The following seven lines are for 2019-A.
               'floodChoco2019': 'flood',
               'fireAndover2019': 'wildfire',
               'earthquakeCalifornia2014': 'earthquake',
               'earthquakeBohol2013': 'earthquake',
               'hurricaneFlorence2018': 'typhoon',
               'shootingDallas2017': 'shooting',
-              'fireYMM2016': 'wildfire'}
+              'fireYMM2016': 'wildfire',  # The following six lines are for 2019-B.
+              'albertaWildfires2019': 'wildfire',
+              'cycloneKenneth2019': 'typhoon',
+              'philippinesEarthquake2019': 'earthquake',
+              'coloradoStemShooting2019': 'shooting',
+              'southAfricaFloods2019': 'flood',
+              'sandiegoSynagogueShooting2019': 'shooting'}
 assert len(set(event2type.values())) == 6
 
-priority2score = {'Low': 0.1, 'Medium': 0.3, 'High': 0.8, 'Critical': 1.0}
-# Notice we use the old label (used in 2018) here, such as 'SignificantEventChange' instead of 'NewSubEvent'
-informative_categories = ['GoodsServices', 'SearchAndRescue', 'MovePeople', 'EmergingThreats', 'SignificantEventChange', 'ServiceAvailable']
+# Label adjustment according to http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/2019Changes.html
+short_old2new_label = {'PastNews': 'ContextualInformation',
+                       'ContinuingNews': 'News',
+                       'KnownAlready': 'OriginalEvent',
+                       'SignificantEventChange': 'NewSubEvent'}
+# Priority weights according to
+# http://dcs.gla.ac.uk/~richardm/TREC_IS/2019/TREC%202019-A%20Incident%20Streams%20Track.pdf
+priority2score = {'Irrelevant': 0.0, 'Low': 0.25, 'Medium': 0.5, 'High': 0.75, 'Critical': 1.0}
+informative_categories = ['GoodsServices', 'SearchAndRescue', 'MovePeople',
+                          'EmergingThreats', 'NewSubEvent', 'ServiceAvailable']
 
 
 class GloveVectorizer(object):
@@ -135,6 +148,11 @@ def check_args_conflict(args):
                                          "directly apply the event-wise setting with the best parameter."
     if args.class_weight_scheme == 'customize':
         assert args.model == 'rf', "We only support random forest for customized weight"
+
+    if args.merge_priority_score != 'simple':
+        assert args.merge_priority_score == 'advanced'
+        assert args.train_regression, "The advanced method must use both regression and prediction."
+        assert 0.0 <= args.advanced_predict_weight <= 1.0
 
 
 def get_class_weight(args, label2id: Dict[str, int], id2label: List[str], formal_train_file: str) -> List[float]:
@@ -398,38 +416,30 @@ def get_final_metrics(metrics_collect, metrics_names: List[str]):
     logger.info("The final evaluation metrics val for event-wise model is {}".format(accumulate_res))
 
 
-def formalize_train_file(origin_train_file: str, formalized_train_file: str):
-    fout = open(formalized_train_file, 'w', encoding='utf8')
-    formalize_helper(origin_train_file, fout)
-    fout.close()
-
-
-def formalize_test_file(origin_test_files: List[str], formalized_test_file: str):
-    fout = open(formalized_test_file, 'w', encoding='utf8')
-    for test_file in origin_test_files:
+def formalize_files(origin_file_list: List[str], formalized_out_file: str):
+    fout = open(formalized_out_file, 'w', encoding='utf8')
+    for test_file in origin_file_list:
         formalize_helper(test_file, fout)
     fout.close()
 
 
-def get_2019_json_file_list(data_folder: str):
+def get_2019_json_file_list(data_folder: str, prefix: str):
     filename_list = []
     for filename in os.listdir(data_folder):
-        if filename.startswith("trecis2019-A-test") and filename.endswith(".json"):
+        if filename.startswith(prefix) and filename.endswith(".json"):
             filename_list.append(filename)
     filename_list = sorted(filename_list)
     return filename_list
 
 
-def formalize_2019_test_file(data_folder: str, formalized_file: str):
-    """
+def formalize_test_file(data_folder: str, formalized_file: str, prefix: str):
+    """ Read test json files, and the test files are specified by `prefix`, such as 'trecis2019-B'.
+
     As the 2019-A test data downloaded by official jar are some separate files, so we need to collect them together
     Notice that we don't know the label and priority of the test data, we use UNK to replace it.
     The 2019-A test data has already been ranked by time, so we just need to read line by line
-    :param data_folder:
-    :param formalized_file:
-    :return:
     """
-    filename_list = get_2019_json_file_list(data_folder)
+    filename_list = get_2019_json_file_list(data_folder, prefix)
     fout = open(formalized_file, 'w', encoding='utf8')
     for filename in filename_list:
         eventid = filename.split('.')[1]
@@ -443,20 +453,37 @@ def formalize_2019_test_file(data_folder: str, formalized_file: str):
 
 
 def formalize_helper(filename, fout):
-    with open(filename, 'r', encoding='utf8') as f:
+    """
+    Note the 2019 data file provided by TREC uses `latin-1` instead of `utf8` encoding.
+    Another thing is that for old data the label set is old (ITR-H.types.v2.json), but as we use the new label set now
+        (ITR-H.types.v4.json), we need to convert the old label to new label in advance.
+    The "Unknown" is deleted after v2, so we also ignore this label in our data.
+    """
+    is_2019_data = '2019' in filename
+    unk_count = 0
+    with open(filename, 'r', encoding='latin-1' if is_2019_data else 'utf8') as f:
         train_file_content = json.load(f)
         for event in train_file_content['events']:
             eventid = event['eventid']
-            # To handle data split of the event name which is not exactly the same as in offcial doc
-            if 'nepalEarthquake2015S' == eventid[:len('nepalEarthquake2015S')]:
-                eventid = 'nepalEarthquake2015'
-            if 'typhoonHagupit2014S' == eventid[:len('typhoonHagupit2014S')]:
-                eventid = 'typhoonHagupit2014'
+            # To handle data split of the event name which is not exactly the same as in offcial doc.
+            # For example, the `nepalEarthquake2015` may appear as `nepalEarthquake2015S`.
+            if eventid not in event2type:
+                eventid = eventid[:-1]
+            if eventid not in event2type:
+                eventid = eventid[:-1]
             for tweet in event['tweets']:
                 tweetid = tweet['postID']
                 label_list = tweet['categories']
+                if not is_2019_data:
+                    label_list = [short_old2new_label[label] if label in short_old2new_label else label
+                                  for label in label_list]
+                    label_list = [label for label in label_list if label != 'Unknown']
+                    if len(label_list) == 0:
+                        unk_count += 1
+                        break
                 priority = tweet['priority']
                 fout.write('{0}\t{1}\t{2}\t{3}\n'.format(tweetid, ','.join(label_list), priority, event2type[eventid]))
+    print("There are {0} lines discarded in {1} because only has one 'Unknown' lebel".format(unk_count, filename))
 
 
 def merge_files(filenames: List[str], outfile: str):

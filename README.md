@@ -311,6 +311,7 @@ And the additional weights added in the customized class weights could also be t
 - [done] Regression to get priority score.
 - Classification to get priority score (give more weights to the high priority).
 - Run the feature extraction tools again on all data (including 2019-B) and predict.
+- For regression, change it to classification and give higher weights to high priority.
 
 ** Some Experimental Results **
 Use random forest (customized weight).
