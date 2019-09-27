@@ -21,11 +21,7 @@ def merge_tweets_v3():
     for filename in filename_list:
         with open(filename, 'r', encoding='utf8') as f:
             for line in f:
-                try:
-                    content = json.loads(line)
-                except:
-                    print(filename)
-                    quit()
+                content = json.loads(line)
                 formatted_content = json.loads(content['allProperties']['srcjson'])
                 formatted_content['full_text'] = formatted_content['text']
 
@@ -87,7 +83,7 @@ def merge_tweets_v2():
     """
     filename_list = []
     for filename in os.listdir('.'):
-        if filename.endswith(".json"):
+        if filename.startswith("trecis") and filename.endswith(".json") and not filename.startswith("trecis2019-B"):
             filename_list.append(filename)
     filename_list = sorted(filename_list)
 

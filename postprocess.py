@@ -6,21 +6,21 @@ import numpy as np
 import utils
 
 # For 2019-A test events.
-# event2incidentid = {'floodChoco2019': 'TRECIS-CTIT-H-Test-022',
-#                     'fireAndover2019': 'TRECIS-CTIT-H-Test-023',
-#                     'earthquakeCalifornia2014': 'TRECIS-CTIT-H-Test-024',
-#                     'earthquakeBohol2013': 'TRECIS-CTIT-H-Test-025',
-#                     'hurricaneFlorence2018': 'TRECIS-CTIT-H-Test-026',
-#                     'shootingDallas2017': 'TRECIS-CTIT-H-Test-027',
-#                     'fireYMM2016': 'TRECIS-CTIT-H-Test-028'}
+event2incidentid_2019A = {'floodChoco2019': 'TRECIS-CTIT-H-Test-022',
+                          'fireAndover2019': 'TRECIS-CTIT-H-Test-023',
+                          'earthquakeCalifornia2014': 'TRECIS-CTIT-H-Test-024',
+                          'earthquakeBohol2013': 'TRECIS-CTIT-H-Test-025',
+                          'hurricaneFlorence2018': 'TRECIS-CTIT-H-Test-026',
+                          'shootingDallas2017': 'TRECIS-CTIT-H-Test-027',
+                          'fireYMM2016': 'TRECIS-CTIT-H-Test-028'}
 
 # For 2019-B test events.
-event2incidentid = {'albertaWildfires2019': 'TRECIS-CTIT-H-Test-029',
-                    'cycloneKenneth2019': 'TRECIS-CTIT-H-Test-030',
-                    'philippinesEarthquake2019': 'TRECIS-CTIT-H-Test-031',
-                    'coloradoStemShooting2019': 'TRECIS-CTIT-H-Test-032',
-                    'southAfricaFloods2019': 'TRECIS-CTIT-H-Test-033',
-                    'sandiegoSynagogueShooting2019': 'TRECIS-CTIT-H-Test-034'}
+event2incidentid_2019B = {'albertaWildfires2019': 'TRECIS-CTIT-H-Test-029',
+                          'cycloneKenneth2019': 'TRECIS-CTIT-H-Test-030',
+                          'philippinesEarthquake2019': 'TRECIS-CTIT-H-Test-031',
+                          'coloradoStemShooting2019': 'TRECIS-CTIT-H-Test-032',
+                          'southAfricaFloods2019': 'TRECIS-CTIT-H-Test-033',
+                          'sandiegoSynagogueShooting2019': 'TRECIS-CTIT-H-Test-034'}
 
 # old2new = {'Other-PastNews': 'Other-ContextualInformation',
 #            'Other-ContinuingNews': 'Report-News',
@@ -52,10 +52,11 @@ class PostProcess(object):
         self.dev_label_file = args.dev_label_file
         self.dev_predict_file = args.dev_predict_file
         self.test_predict_file = args.test_predict_file
+        self.event2incidentid = event2incidentid_2019B if args.data_prefix == "trecis2019-B" else event2incidentid_2019A
         self.tweetid2incidentid = self._get_tweetid_to_incidentid()
         self.test_predict = self._read_test_predict()
         self.test_tweetid_list = self._read_test_tweetid()
-        self.incidentid_list = sorted(list(event2incidentid.values()))
+        self.incidentid_list = sorted(list(self.event2incidentid.values()))
         self.tweetid2prioirty_score = self._get_tweetid2prioirty_score(
             predict_priority_score_out_file) if args.train_regression else None
         assert len(self.test_predict) == len(self.test_tweetid_list)
@@ -124,10 +125,10 @@ class PostProcess(object):
         """
         tweetid2incidentid = dict()
         data_folder = self.raw_tweets_json_folder
-        filename_list = utils.get_2019_json_file_list(data_folder, prefix="trecis2019-B")
+        filename_list = utils.get_2019_json_file_list(data_folder, prefix=self.args.data_prefix)
         for filename in filename_list:
             eventid = filename.split('.')[1]
-            incidentid = event2incidentid[eventid]
+            incidentid = self.event2incidentid[eventid]
             with open(os.path.join(data_folder, filename), 'r', encoding='utf8') as f:
                 for line in f:
                     content = json.loads(line)

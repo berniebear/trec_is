@@ -570,7 +570,10 @@ def get_label2id(label_file: str, train_file: str, threshold: int):
         else:
             label2id[label] = len(label2id)
     print_to_log("With threshold {0}, those labels are filtered out: {1}".format(threshold, removed_labels))
-    assert len(removed_labels) == 0, "In our current setting, there should be no label removed."
+    if len(removed_labels) > 0:
+        # For using v4 label set and training on 2018 data, the 'Location' will never appear.
+        assert len(removed_labels) == 1 and removed_labels[0] == 'Location', \
+            "In our current setting, there should be no label removed except for 'Location'."
 
     return label2id, majority_label, short2long_label
 

@@ -30,16 +30,19 @@ def main():
     logger.info("{}".format(args))
     utils.check_args_conflict(args)
 
-    # Set files which contain data for training and test.
+    # Set files which contain data for training and test. If use "trecis2019-A", it means we want to tune parameters.
+    args.data_prefix = "trecis2019-B"
     # Note that for 2019-B submission, all '2019' means '2019-B' and '2018' means '2018 + 2019-A'
-    label_file = os.path.join(args.data_dir, 'ITR-H.types.v4.json')
+    label_file = os.path.join(args.data_dir, 'ITR-H.types.v{}.json'.format(
+        4 if args.data_prefix == "trecis2019-B" else 3))
     tweet_file_list = [os.path.join(args.data_dir, 'all-tweets.txt')]
     tweet_file_list_2019 = [os.path.join(args.data_dir, 'all-tweets-2019.txt')]
     train_file_list = [os.path.join(args.data_dir, 'TRECIS-CTIT-H-Training.json')]
     train_file_list += [os.path.join(args.data_dir, 'TRECIS-2018-TestEvents-Labels',
                                      'assr{}.test'.format(i)) for i in range(1, 7)]
-    train_file_list += [os.path.join(args.data_dir, '2019ALabels', '2019A-assr{}.json'.format(i)) for i in range(1, 6)]
-    train_file_list += [os.path.join(args.data_dir, '2019ALabels', '2019-assr2.json')]
+    if args.data_prefix == "trecis2019-B":
+        train_file_list += [os.path.join(args.data_dir, '2019ALabels', '2019A-assr{}.json'.format(i)) for i in range(1, 6)]
+        train_file_list += [os.path.join(args.data_dir, '2019ALabels', '2019-assr2.json')]
     test_raw_tweets_json_folder = 'download_tweets'
     # Some output files which has been formalized for further usages.
     formal_train_file = os.path.join(args.data_dir, 'train.txt')
@@ -60,7 +63,7 @@ def main():
 
     # As the original files provided by TREC is quite messy, we formalize them into train and test file.
     utils.formalize_files(train_file_list, formal_train_file)
-    utils.formalize_test_file(test_raw_tweets_json_folder, formal_test_file, prefix="trecis2019-B")
+    utils.formalize_test_file(test_raw_tweets_json_folder, formal_test_file, prefix=args.data_prefix)
     logger.info("The training data file is {0} and testing data file is {1}".format(
         formal_train_file, formal_test_file))
 

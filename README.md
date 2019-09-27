@@ -14,16 +14,38 @@ TREC Incident Stream shared task (official website [here](http://dcs.gla.ac.uk/~
 If you don't have sudo on server, you can use conda to manage all packages.
 
 ### How to Run
-```bash
-python3 main.py --cross_validate
-```
 
-Use `--model` to choose models (usually use naive bayes or random forest).
-Use `--event_wise` to train each model for each event.
-Please refer to `options.py` to get more info about different parameters.
+1. Prepare tweets by following the steps in `download_tweets/readme.md`, 
+and remember to change `merge_tweets_v3` to `merge_tweets_v2` if you want to tune pararmeters on 2019-A data.
 
-Use `--normalize_feat` for normalizing all features. (For example, it normalize the BERT feature on axis=1 and 
-normalize the glove feature on axis=1, and then concatenate those two features).
+2. Uncomments the `quit()` in line 89 which will prepare those four files including `tweet_text_out_file` 
+in `out` folder and then quit. You will see some output message like
+    ```
+    The tweet text and ids has been written to out/tweets-clean-text.txt and out/tweets-id.txt
+    The tweet text and ids has been written to out/tweets-clean-text-2019.txt and out/tweets-id-2019.txt
+    ```
+
+3. Manually run the `extract_features.sh` in `feature_tools` which will prepare several npy feature matrix in `out` folder.
+
+4. Comments the `quit()` in line 89 and run the script `main.py` with `predict_mode`, such as
+    ```
+    python main.py --class_weight_scheme customize --predict_mode --use_pca --model rf --additional_weight 0.2 --force_retrain
+    ```
+    We can use `--model` to choose models (usually use naive bayes or random forest).
+    Use `--event_wise` to train each model for each event.
+    Use `--normalize_feat` for normalizing all features. (For example, it normalize the BERT feature on axis=1 and 
+    normalize the glove feature on axis=1, and then concatenate those two features).
+    Please refer to `options.py` to get more info about different parameters.
+
+5. After running step 4, there will be model checkpoint file stored, and then we can run `main.py` with `get_submission`
+such as
+    ```
+    python main.py --class_weight_scheme customize --get_submission --use_pca --force_retrain --model rf --additional_weight 0.2 --merge_priority_score simple
+    ```
+    We can use `--merge_priority_score` to control if we want to use `simple` strategy or `advanced` strategy (need to specify `advanced_predict_weight`).
+
+6. If you are tuning parameters on 2019-A, you can run `python evaluate_v3.py --weight 10.0` to get the results.
+The parameter tuning results are recorded [here](https://docs.google.com/spreadsheets/d/1mqCOAFt4X4GDwjtU4ggcYkeKuMYvFiFTrN4UtmJo8Bs/edit?usp=sharing).
 
 **Before submission**
 
