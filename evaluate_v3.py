@@ -5,14 +5,13 @@
 # --------------------------------------------------
 
 
-def main(weight):
+def main(input_file):
     version = 2.0  # Notebook Version Number
 
     # Configuration (Change this to match your setting)
     # System output file to evaluate:
-    runFile = "/home/junpeiz/Project/TREC-IS-tuneOn2019A/out/ensemble-customize/weight{}/submit-top-2/submission_rf".format(
-        weight)
-    runName = "rf-regression"
+    runFile = input_file
+    runName = runFile.split('/')[-1]
 
     # The location of the ground truth data against which to compare the run
     classificationLabelFiles = [
@@ -936,7 +935,7 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weight", type=str, help="Weight to specify the result filepath.")
+    parser.add_argument("--input_file", type=str, help="The result file that need to be evaluated.")
     args = parser.parse_args()
 
-    main(args.weight)
+    main(args.input_file)

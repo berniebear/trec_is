@@ -248,9 +248,15 @@ class PostProcess(object):
             threshold = self._find_best_threshold() if self.args.pick_threshold is None else self.args.pick_threshold
 
         incidentid2content_list = {incidentid: [] for incidentid in self.incidentid_list}
+        # To cope with duplicate tweetids in test set (it will raise errors when submit to TREC official website).
+        tweetid_seen = {incidentid: set() for incidentid in self.incidentid_list}
+        count_duplicate = 0
         for i, predict_scores in enumerate(self.test_predict):
             tweetid = self.test_tweetid_list[i]
             incidentid = self.tweetid2incidentid[tweetid]
+            if tweetid in tweetid_seen[incidentid]:
+                count_duplicate += 1
+                continue
 
             if self.args.pick_criteria == 'threshold':
                 predictions = PostProcess._pick_by_threshold(predict_scores, threshold)
@@ -262,6 +268,8 @@ class PostProcess(object):
 
             line_contents = [tweetid, self._get_priority_score(tweetid, predictions), predictions]
             incidentid2content_list[incidentid].append(line_contents)
+            tweetid_seen[incidentid].add(tweetid)
+        print("There are {} tweets are jumper over because of duplication in the same event".format(count_duplicate))
         self._write_incidentid2content_list_to_file(incidentid2content_list)
 
     @staticmethod
