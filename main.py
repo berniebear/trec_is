@@ -74,7 +74,7 @@ def main():
 
     # When get submission, there is no need to run all following steps, but only read the `test_predict_file` and
     # pick some classes as final output according to policy (such as top-2 or auto-threshold).
-    # So you MUST run `--predict_mode` in advance to get the `test_predict_file` prepared.
+    # You MUST run `--predict_mode` in advance to get the `test_predict_file` prepared.
     if args.get_submission:
         postpro = PostProcess(args, label2id, id2label, class_weight, majority_label, short2long_label,
                               formal_train_file, formal_test_file, test_raw_tweets_json_folder,

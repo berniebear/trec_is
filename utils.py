@@ -134,10 +134,9 @@ def check_args_conflict(args):
     """
     assert args.late_fusion is False, "To make the code easier to modify, we don't support late-fusion any more"
     assert args.train_on_small is False, "This function is deprecated"
-    if args.event_wise or args.train_on_small:
-        assert args.cross_validate is True
     if args.event_wise:
-        assert args.train_on_small is False
+        assert args.train_regression is False, "Currently we don't support event-wise regression."
+        assert args.cross_validate is False, "Currently for event-wise, we don't support cross_validate."
     if args.predict_mode:
         assert args.late_fusion is False, "Currently our predict model only supports early-fusion"
         assert args.search_best_parameters is False
@@ -162,7 +161,8 @@ def get_class_weight(args, label2id: Dict[str, int], id2label: List[str], formal
     The original expression in official webiste is:
         We mostly care about getting actionable information to the response officer,
         and less about other categories like sentiment or general news reporting
-    :return:
+
+    :return: A dictionary to map from class index to class weight (name of the class could be got by id2label)
     """
     class_weight = [1.0 / len(label2id)] * len(label2id)
     class_sum_score = {i: 0.0 for i in range(len(label2id))}
@@ -1145,5 +1145,21 @@ def get_rescale_file(model_name='rf'):
     f_out.close()
 
 
+def get_data_size(filename_list):
+    """ Get the size for each dataset for writing the paper. """
+    data_size = 0
+    for filename in filename_list:
+        is_2019_data = '2019' in filename
+        with open(filename, 'r', encoding='latin-1' if is_2019_data else 'utf8') as f:
+            train_file_content = json.load(f)
+            for event in train_file_content['events']:
+                data_size += len(event['tweets'])
+    return data_size
+
+
 if __name__ == '__main__':
-    get_rescale_file()
+    data_dir = 'data'
+    train_file_list = []
+    train_file_list += [os.path.join(data_dir, '2019ALabels', '2019A-assr{}.json'.format(i)) for i in range(1, 6)]
+    train_file_list += [os.path.join(data_dir, '2019ALabels', '2019-assr2.json')]
+    print("The 2019-A test size is {}".format(get_data_size(train_file_list)))

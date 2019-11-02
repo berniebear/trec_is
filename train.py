@@ -31,8 +31,11 @@ class Train(object):
         If we use late fusion, the feature_lens will contain real lens of different features.
         If we don't use late fusion, feature_lens will contain a fake number which is the len of concatenated feature
         Please see details in _fit_data and _predict_data about how we cope with late fusion
-        Notice that as we use one-vs-rest setting for multi-class classification, the class weight should be 'balanced',
-            or in the form of one-vs-res, such as [{0: X, 1: Y} ...] as shown in the parameter explaination in rf
+        Note that as we use one-vs-rest setting for multi-class classification, the class weight should be 'balanced',
+            or in the form of one-vs-res, such as [{0: X, 1: Y} ...] as shown in the parameter explaination in rf.
+        Note that when we use event-wise, the data_y may only have a subset of all labels in id2label, which will cause
+            an error when you try to assign weights for all labels. So we only use a subset for the class_weight.
+
         :param args:
         :param data_x:
         :param data_y:
@@ -50,13 +53,30 @@ class Train(object):
         self.metric_names: List[str] = ['accuracy', 'precision', 'recall', 'f1'] if args.class_weight_scheme == 'balanced' else ['weighted_ce']
         self.clf: List[OneVsRestClassifier] = None
         self.event_type = event_type
+        self.label_idx_appear = None  # It is used to denote if the data_y contains all availabel labels.
+        self.label_old2new = None
+        self.origin_label_num = None
 
         self.class_weight_list = class_weight
         if self.args.class_weight_scheme == 'balanced':
             self.class_weight = 'balanced'
         else:
             mean_weight = np.mean(class_weight)
-            self.class_weight = [{0: mean_weight, 1: weight} for weight in class_weight]
+            # Because each element has multiple labels, we need to iterate through all and get the label set.
+            y_set = set()
+            for labels in data_y:
+                y_set.update(labels)
+            if len(y_set) < len(id2label):
+                self.origin_label_num = len(id2label)
+                # We convert all labels to the "new label" which starts from 0.
+                self.label_idx_appear = [idx for idx in range(len(id2label)) if idx in y_set]
+                self.class_weight = [{0: mean_weight, 1: class_weight[idx]} for idx in self.label_idx_appear]
+                self.label_old2new = {label: idx for idx, label in enumerate(self.label_idx_appear)}
+                for idx_y, labels in enumerate(data_y):
+                    data_y[idx_y] = [self.label_old2new[label] for label in labels]
+                self.id2label = [label for idx, label in enumerate(id2label) if idx in y_set]
+            else:
+                self.class_weight = [{0: mean_weight, 1: weight} for weight in class_weight]
 
     def train_on_all(self):
         """
@@ -95,7 +115,22 @@ class Train(object):
         :param data_x:
         :return:
         """
-        return self._predict_data_by_voting(data_x)
+        return self._convert_result_back_to_old_idx(self._predict_data_by_voting(data_x))
+
+    def _convert_result_back_to_old_idx(self, predicted_result):
+        """
+        If the original data_y contains all labels, which means we don't do a transformation from the old label to the
+        new label, we can direct return the result.
+        If the data_y contains only a subset of the labels, we have done some transformation in the constructor, so we
+        need to convert them back.
+
+        :param predicted_result:
+        :return:
+        """
+        if self.label_idx_appear is not None:
+            for idx in range(len(predicted_result)):
+                predicted_result[idx] = self.label_idx_appear[predicted_result[idx]]
+        return predicted_result
 
     def _predict_data_by_avg_score(self, data_x):
         """
@@ -541,7 +576,14 @@ class Train(object):
         :param test_data:
         :return:
         """
-        return self._get_predict_score(test_data)
+        # predict_score is a numpy ndarray with size [num_instance, num_class]
+        predict_score = self._get_predict_score(test_data)
+        if self.origin_label_num is not None:
+            score = np.zeros((predict_score.shape[0], self.origin_label_num))
+            for idx in range(predict_score.shape[1]):
+                score[:, self.label_idx_appear[idx]] = predict_score[:, idx]
+            predict_score = score
+        return predict_score
 
 
 class TrainRegression(object):
