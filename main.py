@@ -45,8 +45,8 @@ def main():
         train_file_list += [os.path.join(args.data_dir, '2019ALabels', '2019-assr2.json')]
     test_raw_tweets_json_folder = 'download_tweets'
     # Some output files which has been formalized for further usages.
-    formal_train_file = os.path.join(args.data_dir, 'train.txt')
-    formal_test_file = os.path.join(args.data_dir, 'test.txt')
+    formal_train_file = os.path.join(args.data_dir, 'train.txt{}'.format('_small' if args.sanity_check else ''))
+    formal_test_file = os.path.join(args.data_dir, 'test.txt{}')
     tweet_text_out_file = os.path.join(args.out_dir, 'tweets-clean-text.txt')
     tweet_id_out_file = os.path.join(args.out_dir, 'tweets-id.txt')
     tweet_text_out_file_2019 = os.path.join(args.out_dir, 'tweets-clean-text-2019.txt')
@@ -62,7 +62,7 @@ def main():
     args.submission_file = os.path.join(args.submission_folder, 'submission_{}'.format(args.model_name))
 
     # As the original files provided by TREC is quite messy, we formalize them into train and test file.
-    utils.formalize_files(train_file_list, formal_train_file)
+    utils.formalize_files(train_file_list, formal_train_file, args)
     utils.formalize_test_file(test_raw_tweets_json_folder, formal_test_file, prefix=args.data_prefix)
     logger.info("The training data file is {0} and testing data file is {1}".format(
         formal_train_file, formal_test_file))

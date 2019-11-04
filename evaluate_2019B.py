@@ -30,7 +30,7 @@ def main(input_file):
     classificationLabelFiles = [ground_truth_label_dir + filepath for filepath in classificationLabelFiles]
 
     # The location of the ontology file
-    ontologyFile = "ITR-H.types.v4.json"
+    ontologyFile = "data/ITR-H.types.v4.json"
 
     # --------------------------------------------------
     # Static data for the 2019 edition
@@ -87,31 +87,27 @@ def main(input_file):
     var_alpha = 0.3  # Flat gain for providing a correct alert, regardless of the categories selected
     alertPriorityThreshold = 0.7
 
-    resultsFile = open(runName + ".results.overall.txt", "w+")
-    resultsFile.write("TREC-IS 2019-B Notebook Evaluator v" + str(version) + "\n")
-    resultsFile.write("Run: " + runName + " (" + runFile + ")" + "\n")
-    resultsFile.write("" + "\n")
-
-    perTopicFile = open(runName + ".results.pertopic.txt", "w+")
-    perTopicFile.write("TREC-IS 2019-B Notebook Evaluator v" + str(version) + "\n")
-    perTopicFile.write("Run: " + runName + " (" + runFile + ")" + "\n")
-    perTopicFile.write("" + "\n")
-
-    perEventFile = open(runName + ".results.perevent.txt", "w+")
-    perEventFile.write("TREC-IS 2019-B Notebook Evaluator v" + str(version) + "\n")
-    perEventFile.write("Run: " + runName + " (" + runFile + ")" + "\n")
-    perEventFile.write("" + "\n")
+    # resultsFile = open(runName + ".results.overall.txt", "w+")
+    # resultsFile.write("TREC-IS 2019-B Notebook Evaluator v" + str(version) + "\n")
+    # resultsFile.write("Run: " + runName + " (" + runFile + ")" + "\n")
+    # resultsFile.write("" + "\n")
+    #
+    # perTopicFile = open(runName + ".results.pertopic.txt", "w+")
+    # perTopicFile.write("TREC-IS 2019-B Notebook Evaluator v" + str(version) + "\n")
+    # perTopicFile.write("Run: " + runName + " (" + runFile + ")" + "\n")
+    # perTopicFile.write("" + "\n")
+    #
+    # perEventFile = open(runName + ".results.perevent.txt", "w+")
+    # perEventFile.write("TREC-IS 2019-B Notebook Evaluator v" + str(version) + "\n")
+    # perEventFile.write("Run: " + runName + " (" + runFile + ")" + "\n")
+    # perEventFile.write("" + "\n")
 
     # --------------------------------------------------
     # Processing Starts Here
     # --------------------------------------------------
     import json
-    from pprint import pprint
-    import gzip
     import math
     import numpy as np
-    import numpy as np
-    import matplotlib.pyplot as plt
 
     # --------------------------------------------------
     # Stage 1: Load the ground truth dataset
@@ -119,8 +115,8 @@ def main(input_file):
 
     groundtruthJSON = []
     for groundtruthFile in classificationLabelFiles:
-        print("Reading " + groundtruthFile)
-        with open(groundtruthFile) as groundtruthJSONFile:
+        # print("Reading " + groundtruthFile)
+        with open(groundtruthFile, encoding='latin-1') as groundtruthJSONFile:
             groundtruthJSON.append(json.load(groundtruthJSONFile))
     # pprint(groundtruthJSON["events"])
 
@@ -678,12 +674,12 @@ def main(input_file):
         # print(classification_report(category2GroundTruth[categoryId], category2Predicted[categoryId],
         #                             target_names=target_names))
 
-        perTopicFile.write(categoryId + "\n")
-        perTopicFile.write(classification_report(category2GroundTruth[categoryId], category2Predicted[categoryId],
-                                                 target_names=target_names) + "\n")
-        perTopicFile.write("" + "\n")
-
-    perTopicFile.write("" + "\n")
+    #     perTopicFile.write(categoryId + "\n")
+    #     perTopicFile.write(classification_report(category2GroundTruth[categoryId], category2Predicted[categoryId],
+    #                                              target_names=target_names) + "\n")
+    #     perTopicFile.write("" + "\n")
+    #
+    # perTopicFile.write("" + "\n")
 
     # %%
     # --------------------------------------------------
@@ -708,14 +704,14 @@ def main(input_file):
 
     width = 0.90  # the width of the bars: can also be len(x) sequence
 
-    p1 = plt.bar(ind, scoresPerCategoryF1, width)
-
-    plt.ylabel('F1 Scores')
-    plt.title('F1 Scores by Information Type')
-    plt.xticks(ind, categoryLabels, rotation='vertical')
-    plt.yticks(np.arange(0, 1, 0.1))
-
-    plt.show()
+    # p1 = plt.bar(ind, scoresPerCategoryF1, width)
+    #
+    # plt.ylabel('F1 Scores')
+    # plt.title('F1 Scores by Information Type')
+    # plt.xticks(ind, categoryLabels, rotation='vertical')
+    # plt.yticks(np.arange(0, 1, 0.1))
+    #
+    # plt.show()
     # %%
     # --------------------------------------------------
     # TREC-IS 2019-A
@@ -728,10 +724,10 @@ def main(input_file):
     # We report performance for all categories, high importance categories and low importance categories
     # Macro average (categories have equal weight)
 
-    perEventFile.write("--------------------------------------------------" + "\n")
-    perEventFile.write("EVALUATON: Information Type Categorization (Multi-type)" + "\n")
-    perEventFile.write("Per Event Performance" + "\n")
-    perEventFile.write("--------------------------------------------------" + "\n")
+    # perEventFile.write("--------------------------------------------------" + "\n")
+    # perEventFile.write("EVALUATON: Information Type Categorization (Multi-type)" + "\n")
+    # perEventFile.write("Per Event Performance" + "\n")
+    # perEventFile.write("--------------------------------------------------" + "\n")
 
     for eventId in eventIdentifiers:
         tavgPrecision = 0.0
@@ -852,16 +848,16 @@ def main(input_file):
 
         scoresPerEventF1.append(avgF1 / len(informationTypes2Index))
 
-    width = 0.90  # the width of the bars: can also be len(x) sequence
-
-    p1 = plt.bar(ind, scoresPerEventF1, width)
-
-    plt.ylabel('F1 Scores')
-    plt.title('F1 Category Scores by Event')
-    plt.xticks(ind, eventIdentifiers, rotation='vertical')
-    plt.yticks(np.arange(0, 1, 0.1))
-
-    plt.show()
+    # width = 0.90  # the width of the bars: can also be len(x) sequence
+    #
+    # p1 = plt.bar(ind, scoresPerEventF1, width)
+    #
+    # plt.ylabel('F1 Scores')
+    # plt.title('F1 Category Scores by Event')
+    # plt.xticks(ind, eventIdentifiers, rotation='vertical')
+    # plt.yticks(np.arange(0, 1, 0.1))
+    #
+    # plt.show()
     # %%
     # --------------------------------------------------
     # TREC-IS 2019-A
@@ -943,28 +939,28 @@ def main(input_file):
     N = len(informationTypes2Index)
     ind = np.arange(N)
 
-    mseValues = []
-    categoryLabels = []
-    for categoryId in informationTypes2Index.keys():
-        groundTruthPriorities = category2GroundTruthPriority[categoryId]
-        predictedPriorities = category2PredictedPriority[categoryId]
-        error = mean_squared_error(groundTruthPriorities, predictedPriorities)
-        categoryLabels.append(categoryId)
-        mseValues.append(error);
+    # mseValues = []
+    # categoryLabels = []
+    # for categoryId in informationTypes2Index.keys():
+    #     groundTruthPriorities = category2GroundTruthPriority[categoryId]
+    #     predictedPriorities = category2PredictedPriority[categoryId]
+    #     error = mean_squared_error(groundTruthPriorities, predictedPriorities)
+    #     categoryLabels.append(categoryId)
+    #     mseValues.append(error)
 
-    width = 0.90  # the width of the bars: can also be len(x) sequence
-
-    p1 = plt.bar(ind, mseValues, width)
-
-    plt.ylabel('MSE Scores (lower is better)')
-    plt.title('Mean Squared Error on Predicted Priority Levels Per Type')
-    plt.xticks(ind, categoryLabels, rotation='vertical')
-    plt.yticks(np.arange(0, 1, 0.1))
-
-    plt.show()
-    resultsFile.close()
-    perTopicFile.close()
-    perEventFile.close()
+    # width = 0.90  # the width of the bars: can also be len(x) sequence
+    #
+    # p1 = plt.bar(ind, mseValues, width)
+    #
+    # plt.ylabel('MSE Scores (lower is better)')
+    # plt.title('Mean Squared Error on Predicted Priority Levels Per Type')
+    # plt.xticks(ind, categoryLabels, rotation='vertical')
+    # plt.yticks(np.arange(0, 1, 0.1))
+    #
+    # plt.show()
+    # resultsFile.close()
+    # perTopicFile.close()
+    # perEventFile.close()
 
 
 if __name__ == '__main__':

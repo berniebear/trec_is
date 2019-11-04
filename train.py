@@ -50,12 +50,16 @@ class Train(object):
         self.data_y = data_y
         self.id2label = id2label
         self.feature_lens = feature_lens
-        self.metric_names: List[str] = ['accuracy', 'precision', 'recall', 'f1'] if args.class_weight_scheme == 'balanced' else ['weighted_ce']
+        self.metric_names: List[str] = ['precision', 'recall', 'f1', 'accuracy'] + [
+            'high_prior_' + metric_name for metric_name in ['precision', 'recall', 'f1', 'accuracy']]
         self.clf: List[OneVsRestClassifier] = None
         self.event_type = event_type
         self.label_idx_appear = None  # It is used to denote if the data_y contains all availabel labels.
         self.label_old2new = None
         self.origin_label_num = None
+        self.informative_label_idx = set(
+            [idx for idx, label in enumerate(id2label) if label in utils.informative_categories])
+        assert len(self.informative_label_idx) == len(utils.informative_categories)
 
         self.class_weight_list = class_weight
         if self.args.class_weight_scheme == 'balanced':
@@ -66,7 +70,7 @@ class Train(object):
             y_set = set()
             for labels in data_y:
                 y_set.update(labels)
-            if len(y_set) < len(id2label):
+            if event_type is not None and len(y_set) < len(id2label):
                 self.origin_label_num = len(id2label)
                 # We convert all labels to the "new label" which starts from 0.
                 self.label_idx_appear = [idx for idx in range(len(id2label)) if idx in y_set]
@@ -295,33 +299,36 @@ class Train(object):
             self._search_by_our_own(n_iter)
 
     def _search_by_sklearn(self, n_iter):
-        """
-        Use the RandomizedSearchCV API of sklearn, but need to customize the scoring function
+        """ Use the RandomizedSearchCV API of sklearn, but need to customize the scoring function.
+
         The advantage is that it parallelized well (However, according to the warning
             "Multiprocessing-backed parallel loops cannot be nested", if the model is parallelized,
-            the random search will be serielized automatically)
-        Notice that as the model clf is stored as an attribute named estimator inside the OneVsRestClassifier model,
-            we should add "estimator__" as prefix for setting their parameters in the OneVsRestClassifier wrapper
-        Another thing to notice is that Because parallel jobs cannot be nested, we can set model to be paralled and
-            search to be sequential, or model to be sequential but search to be parallel.
-        :param n_iter:
+            the random search will be serielized automatically). Because parallel jobs cannot be nested,
+            we can set model to be paralled and search to be sequential, or model to be sequential
+            but search to be parallel.
+        Note that as the model clf is stored as an attribute named estimator inside the OneVsRestClassifier model,
+            we should add "estimator__" as prefix for setting their parameters in the OneVsRestClassifier wrapper.
+
+        WARNING: this function has been deprecated because it is not compatible with the new contest in 2019.
+
+        :param n_iter: The number of iterations for searching parameters.
         :return:
         """
         if self.args.model == 'rf':
             clf = RandomForestClassifier(n_estimators=128, class_weight=self.class_weight, n_jobs=1)
             param_dist = {
-                "estimator__max_depth": [2, 4, 8, 16, 32, 64, 128, None],
-                "estimator__max_features": scipy.stats.randint(1, 512),
-                "estimator__min_samples_split": scipy.stats.randint(2, 512),
-                "estimator__min_samples_leaf": scipy.stats.randint(2, 512),
-                "estimator__criterion": ["gini", "entropy"],
+                "max_depth": [2, 4, 8, 16, 32, 64, 128, None],
+                "max_features": scipy.stats.randint(1, 512),
+                "min_samples_split": scipy.stats.randint(2, 512),
+                "min_samples_leaf": scipy.stats.randint(2, 512),
+                "criterion": ["gini", "entropy"],
             }
         elif self.args.model == 'bernoulli_nb':
             clf = BernoulliNB()
             param_dist = {
-                "estimator__alpha": scipy.stats.uniform(),
-                "estimator__binarize": scipy.stats.uniform(),
-                "estimator__fit_prior": [True, False],
+                "alpha": scipy.stats.uniform(),
+                "binarize": scipy.stats.uniform(),
+                "fit_prior": [True, False],
             }
         elif self.args.model == 'svm_linear':
             clf = CalibratedClassifierCV(LinearSVC())
@@ -351,10 +358,10 @@ class Train(object):
         # Notice that as we use clf.predict_proba in our cross-validation, we need to set needs_proba=True here
         scorer = make_scorer(anytype_f1_scorer, greater_is_better=True, needs_proba=True, id2label=self.id2label)
         if self.args.model == 'svm_linear':
-            search = GridSearchCV(clf, param_grid=param_dist, cv=kf, scoring=scorer, n_jobs=-1, verbose=10)
+            search = GridSearchCV(clf, param_grid=param_dist, cv=kf, scoring=scorer, n_jobs=1, verbose=10)
         else:
             search = RandomizedSearchCV(clf, param_distributions=param_dist, n_iter=n_iter, cv=kf,
-                                        scoring=scorer, n_jobs=-1, verbose=10)
+                                        scoring=scorer, n_jobs=1, verbose=10)
 
         search.fit(self.data_x, self.data_y)
 
@@ -412,7 +419,7 @@ class Train(object):
         else:
             param_list = list(ParameterSampler(param_dist, n_iter=n_iter))
 
-        metric_name = 'f1' if self.args.class_weight_scheme == 'balanced' else 'weighted_ce'
+        metric_name = 'high_prior_f1'
         best_metric = float("-inf")
         best_param = dict()
         for i, param in enumerate(param_list):
@@ -529,6 +536,9 @@ class Train(object):
         If we are performing event-wise training, we need to return the metrics for each running (event).
         Note: If you want to get more balanced k-fold split, you can refer to `proba_mass_split` in utils.py,
             or the `stratify_split` in utils.py which is implemented based on Sechidis et. al paper.
+
+        For 2018 task, which uses any-type evaluation, you can use
+            metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
         :return:
         """
         print_to_log('Use {} fold cross validation'.format(self.args.cv_num))
@@ -545,12 +555,8 @@ class Train(object):
             predict_score = self._get_predict_score(X_test)
             dev_predict[test_idx_list] = predict_score
 
-            if self.args.class_weight_scheme == 'balanced':
-                y_predict = self._predict_data(X_test)
-                metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
-            else:
-                metric_results = utils.evaluate_weighted_sum(y_test, predict_score, self.class_weight_list)
-
+            metric_results = utils.evaluate_2019B(
+                y_test, predict_score, self.informative_label_idx, self.args)
             for metric_name in self.metric_names:
                 metric_values[metric_name].append([metric_results[metric_name], len(y_test)])
 
@@ -560,7 +566,7 @@ class Train(object):
             print_to_log('The average {0} score is {1}'.format(metric_name, metric_weighted_avg[metric_name]))
 
         if self.args.search_best_parameters:
-            target_metric = 'f1' if self.args.class_weight_scheme == 'balanced' else 'weighted_ce'
+            target_metric = 'high_prior_f1'
             return metric_weighted_avg[target_metric]
 
         return {metric_name: metric_weighted_avg[metric_name] for metric_name in self.metric_names}, dev_predict
@@ -573,10 +579,13 @@ class Train(object):
         Predict on test data and write to file, which can also be used for ensemble later.
         Note that for the event-wise model, we need to merge all predictions into a list to keep the original order,
             which has been done in main.py
+        Another thing is that for event-wise model we may convert the label to a new set (to make it from 0 to k), so
+            we need to convert them back after the prediction.
+
         :param test_data:
-        :return:
+        :return: A numpy ndarray with size [num_instance, num_class] to represent the predicted score for each class.
         """
-        # predict_score is a numpy ndarray with size [num_instance, num_class]
+        # The `predict_score` is a numpy ndarray with size [num_instance, num_class].
         predict_score = self._get_predict_score(test_data)
         if self.origin_label_num is not None:
             score = np.zeros((predict_score.shape[0], self.origin_label_num))

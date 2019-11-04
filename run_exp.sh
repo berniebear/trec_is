@@ -1,35 +1,17 @@
-for weight in 0.2 1.0 5.0
+nohup python -u main.py --cross_validate --use_pca --class_weight_scheme customize --model rf --additional_weight 0.2 --search_best_parameters --search_by_sklearn_api --random_search_n_iter 50
+
+nohup python -u main.py --cross_validate --use_pca --search_best_parameters --search_by_sklearn_api --random_search_n_iter 50
+
+
+for weight in 0.2 0.5 1.0 2.0 5.0 10.0
 do
 
-for pick in "threshold"
-do
-
-for threshold in 0.7 0.8 0.9
-do
-# python main.py --class_weight_scheme customize --predict_mode --use_pca --model rf --additional_weight $weight --force_retrain
-
-python main.py --class_weight_scheme customize --get_submission --use_pca --force_retrain --model rf --additional_weight $weight --merge_priority_score simple --pick_criteria $pick --pick_threshold $threshold
-echo "python main.py --class_weight_scheme customize --get_submission --use_pca --force_retrain --model rf --additional_weight $weight --merge_priority_score simple --pick_criteria $pick --pick_threshold $threshold"
-python evaluate_v3.py --weight $weight
+# python main.py --predict_mode --use_pca --force_retrain --event_wise --class_weight_scheme customize --model rf --additional_weight $weight
+# python main.py --get_submission --use_pca --force_retrain --event_wise --class_weight_scheme customize --model rf --additional_weight $weight
+echo "python main.py --get_submission --use_pca --force_retrain --event_wise --class_weight_scheme customize --model rf --additional_weight $weight"
+python evaluate_2019B.py --input_file out/ensemble-customize/weight${weight}/submit-top-2/submission_rf-event
 echo ""
 
-python main.py --class_weight_scheme customize --get_submission --use_pca --force_retrain --model rf --additional_weight $weight --merge_priority_score simple --train_regression --pick_criteria $pick --pick_threshold $threshold
-echo "python main.py --class_weight_scheme customize --get_submission --use_pca --force_retrain --model rf --additional_weight $weight --merge_priority_score simple --train_regression --pick_criteria $pick --pick_threshold $threshold"
-python evaluate_v3.py --weight $weight
-echo ""
-
-python main.py --class_weight_scheme customize --get_submission --use_pca --force_retrain --model rf --additional_weight $weight --merge_priority_score advanced --train_regression --advanced_predict_weight 0.0 --pick_criteria $pick --pick_threshold $threshold
-echo "python main.py --class_weight_scheme customize --get_submission --use_pca --force_retrain --model rf --additional_weight $weight --merge_priority_score advanced --train_regression --advanced_predict_weight 0.0 --pick_criteria $pick --pick_threshold $threshold"
-python evaluate_v3.py --weight $weight
-echo ""
-
-python main.py --class_weight_scheme customize --get_submission --use_pca --force_retrain --model rf --additional_weight $weight --merge_priority_score advanced --train_regression --advanced_predict_weight 0.5 --pick_criteria $pick --pick_threshold $threshold
-echo "python main.py --class_weight_scheme customize --get_submission --use_pca --force_retrain --model rf --additional_weight $weight --merge_priority_score advanced --train_regression --advanced_predict_weight 0.5 --pick_criteria $pick --pick_threshold $threshold"
-python evaluate_v3.py --weight $weight
-echo ""
-
-done
-done
 done
 
 # for model in "bernoulli_nb" "rf" "xgboost"

@@ -2,7 +2,7 @@ import os
 import re
 import logging
 import json
-import math
+
 from typing import List, Dict
 import numpy as np
 import pickle
@@ -10,12 +10,15 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC, SVC
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.multiclass import OneVsRestClassifier
-from sklearn.calibration import CalibratedClassifierCV
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 
 # For processing tweets
 from nltk.stem import PorterStemmer
 from nltk.tokenize import TweetTokenizer
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
+from postprocess import PostProcess
+
 porter = PorterStemmer()
 tweet_tokenizer = TweetTokenizer()
 sentiment_analyzer = SentimentIntensityAnalyzer()
@@ -145,6 +148,7 @@ def check_args_conflict(args):
         assert args.event_wise is False, "Current model doesn't support search best parameter for event-wise model." \
                                          "We recommend to search parameter for general model and " \
                                          "directly apply the event-wise setting with the best parameter."
+        assert args.search_by_sklearn_api is False, "Please use our own method instead of the sklearn API."
     if args.class_weight_scheme == 'customize':
         assert args.model == 'rf', "We only support random forest for customized weight"
 
@@ -205,6 +209,7 @@ def write_predict_and_label(args, formal_train_file: str, label2id: Dict[str, in
     """
     For each call of this function, we will write the dev labels (multiple labels per line)
         and dev predict (the probability score per line) to the file.
+    Those files can be used during the ensemble, because the dev features and dev labels could be used to train it.
     :return:
     """
     dev_label_file = args.dev_label_file
@@ -416,10 +421,10 @@ def get_final_metrics(metrics_collect, metrics_names: List[str]):
     logger.info("The final evaluation metrics val for event-wise model is {}".format(accumulate_res))
 
 
-def formalize_files(origin_file_list: List[str], formalized_out_file: str):
+def formalize_files(origin_file_list: List[str], formalized_out_file: str, args):
     fout = open(formalized_out_file, 'w', encoding='utf8')
     for test_file in origin_file_list:
-        formalize_helper(test_file, fout)
+        formalize_helper(test_file, fout, args.sanity_check)
     fout.close()
 
 
@@ -452,7 +457,7 @@ def formalize_test_file(data_folder: str, formalized_file: str, prefix: str):
     fout.close()
 
 
-def formalize_helper(filename, fout):
+def formalize_helper(filename, fout, sanity_check=False):
     """
     Note the 2019 data file provided by TREC uses `latin-1` instead of `utf8` encoding.
     Another thing is that for old data the label set is old (ITR-H.types.v2.json), but as we use the new label set now
@@ -461,6 +466,7 @@ def formalize_helper(filename, fout):
     """
     is_2019_data = '2019' in filename
     unk_count = 0
+    line_write_count = 0
     with open(filename, 'r', encoding='latin-1' if is_2019_data else 'utf8') as f:
         train_file_content = json.load(f)
         for event in train_file_content['events']:
@@ -483,7 +489,15 @@ def formalize_helper(filename, fout):
                         break
                 priority = tweet['priority']
                 fout.write('{0}\t{1}\t{2}\t{3}\n'.format(tweetid, ','.join(label_list), priority, event2type[eventid]))
-    print("There are {0} lines discarded in {1} because only has one 'Unknown' lebel".format(unk_count, filename))
+                line_write_count += 1
+                if sanity_check:
+                    # To make sure all labels has at least cv_num data points (or the cross validation will fail).
+                    for _ in range(5):
+                        fout.write(
+                            '{0}\t{1}\t{2}\t{3}\n'.format(tweetid, ','.join(label_list), priority, event2type[eventid]))
+                    if line_write_count >= 50:
+                        return
+    print("There are {0} lines discarded in {1} because it only has 'Unknown' lebel".format(unk_count, filename))
 
 
 def merge_files(filenames: List[str], outfile: str):
@@ -583,6 +597,52 @@ def get_id2label(label2id: dict):
     for label, idx in label2id.items():
         id2label[idx] = label
     return id2label
+
+
+def evaluate_2019B(y_test: np.ndarray, predict_score: np.ndarray, high_prior_labels: set, args) -> Dict[str, float]:
+    """
+    Use the evaluation script for 2019B as a reference to get those metrics.
+
+    We calculate the score for each category, and then average them (with some constraints such as the high prior).
+    For a category c, for each tweet if it contains c in ground truth, we will label it as 1, and similar for the
+        prediction, and then we calculate the precirsion/recall/f1 for c.
+
+    :param y_test: A binary 2-D matrix where [i,j] entry represents if ith instance has label j.
+    :param predict_score: A matrix with size [data_num, class_num] and each entry is a score.
+    :param high_prior_labels: The set of the label which belongs to the informative type.
+    :return:
+    """
+    class_num = predict_score.shape[1]
+    precision, recall, f1, accuracy = 0.0, 0.0, 0.0, 0.0
+    high_prior_precision, high_prior_recall, high_prior_f1, high_prior_accuracy = 0.0, 0.0, 0.0, 0.0
+    for class_idx in range(class_num):
+        ground_truth = y_test[:, class_idx]
+        if args.pick_criteria == 'top':
+            predict_label = [PostProcess._pick_top_k(it_predict_score, args.pick_k) for it_predict_score in predict_score]
+        else:
+            raise NotImplementedError("Currently other pick criteria is not supported for cross-validation")
+        predict_label = np.asarray([1 if class_idx in k_labels else 0 for k_labels in predict_label])
+        current_precision = precision_score(ground_truth, predict_label, average='binary')
+        current_recall = recall_score(ground_truth, predict_label, average='binary')
+        current_f1 = f1_score(ground_truth, predict_label, average='binary')
+        current_accuracy = accuracy_score(ground_truth, predict_label)
+
+        precision += current_precision
+        recall += current_recall
+        f1 += current_f1
+        accuracy += current_accuracy
+
+        if class_idx in high_prior_labels:
+            high_prior_precision += current_precision
+            high_prior_recall += current_recall
+            high_prior_f1 += current_f1
+            high_prior_accuracy += current_accuracy
+
+    return {'precision': precision / class_num, 'recall': recall / class_num, 'f1': f1 / class_num,
+            'accuracy': accuracy / class_num, 'high_prior_precision': high_prior_precision / len(high_prior_labels),
+            'high_prior_recall': high_prior_recall / len(high_prior_labels),
+            'high_prior_f1': high_prior_f1 / len(high_prior_labels),
+            'high_prior_accuracy': high_prior_accuracy / len(high_prior_labels)}
 
 
 def evaluate_weighted_sum(y_test: np.ndarray, predict_score: np.ndarray, class_weight: List[float]) -> Dict[str, float]:

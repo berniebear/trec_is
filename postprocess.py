@@ -294,8 +294,9 @@ class PostProcess(object):
         """
         Because the threshold may be difficult to determine, we can use the top k classes with highest confidence as
             the output. The k had better smaller than 4.
+
         :param k:
-        :return:
+        :return: A list with length `predict_scores.shape[0]`, and each element is a list with k numbers.
         """
         predictions = np.asarray(predict_scores).argsort()[-k:][::-1].tolist()
         return predictions
