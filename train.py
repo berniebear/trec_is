@@ -9,7 +9,7 @@ from sklearn.model_selection import KFold, RandomizedSearchCV, ParameterSampler,
 from sklearn.linear_model import SGDClassifier, Ridge
 from sklearn.svm import SVC, LinearSVC
 from sklearn.multiclass import OneVsRestClassifier
-from sklearn.metrics import f1_score, make_scorer
+from sklearn.metrics import make_scorer
 from sklearn.metrics.pairwise import chi2_kernel
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.ensemble import RandomForestClassifier
@@ -192,8 +192,7 @@ class Train(object):
         """
         For those missed tweetid (that cannot be found in twitter API), we use the majority label as the prediction res.
         As we can see in the evaluation script, the rank filed doesn't matter.
-        Todo: Currently we only care about the category prediction, and we don't care about the score, but we need to
-            care about the "priority" in 2019-A task
+
         :param data_x: Feature of data
         :param tweetid_list:
         :param tweetid2idx: Can find the actuall idx of this tweetid in data_x
@@ -226,6 +225,19 @@ class Train(object):
         self.clf = [self._create_single_model(param) for i in range(len(self.feature_lens))]
 
     def _create_single_model(self, param=None):
+        """
+        All parameters are searched by cross-validation.
+
+        Here are some parameters we used in 2018 settings, which has been depricated:
+            [bernoulli_nb]:
+                if self.args.class_weight_scheme == 'balanced':
+                    param = {'alpha': 0.8490, 'binarize': 0.3086, 'fit_prior': True}
+                else:
+                    param = {'alpha': 0.4974, 'binarize': 0.7751, 'fit_prior': True}
+
+        :param param:
+        :return:
+        """
         model_name = self.args.model
         print_to_log("The model used here is {0}".format(model_name))
         if model_name == 'sgd_svm':
@@ -244,17 +256,14 @@ class Train(object):
             clf = GaussianNB()
         elif model_name == 'bernoulli_nb':
             if not param:
-                if self.args.class_weight_scheme == 'balanced':
-                    param = {'alpha': 0.8490, 'binarize': 0.3086, 'fit_prior': True}
-                else:
-                    param = {'alpha': 0.4974, 'binarize': 0.7751, 'fit_prior': True}
+                param = {'alpha': 0.9916, 'binarize': 0.05695, 'fit_prior': True}
             clf = BernoulliNB(**param)
         elif model_name == 'rf':
             if not param:
                 if self.args.class_weight_scheme == 'balanced':
                     param = {
                         'n_estimators': 128,
-                        "n_jobs": 1,
+                        "n_jobs": self.args.n_jobs,
                         'class_weight': self.class_weight,
                         'criterion': 'gini',
                         'max_depth': 64,
@@ -287,6 +296,8 @@ class Train(object):
             clf = XGBClassifier(**param)
         else:
             raise NotImplementedError
+
+        # In current version of sklearn (0.21), it doesn't support OneVsRestClassifier + customized class weight.
         if self.args.class_weight_scheme == 'balanced':
             return OneVsRestClassifier(clf, n_jobs=self.args.n_jobs)
         else:
@@ -353,7 +364,6 @@ class Train(object):
             raise ValueError("The model {} doesn't support parameter search in current stage".format(self.args.model))
 
         param_dist = {"estimator__{}".format(k): v for k, v in param_dist.items()}
-        clf = OneVsRestClassifier(clf, n_jobs=1)
         kf = KFold(n_splits=self.args.cv_num, random_state=self.args.random_seed)
         # Notice that as we use clf.predict_proba in our cross-validation, we need to set needs_proba=True here
         scorer = make_scorer(anytype_f1_scorer, greater_is_better=True, needs_proba=True, id2label=self.id2label)
@@ -427,7 +437,7 @@ class Train(object):
                 continue
             print_to_log("Using the parameter set: {}".format(param))
             self._create_model(param)
-            current_metric = self._cross_validate()
+            current_metric = self._cross_validate(target_metric=metric_name)
             if current_metric > best_metric:
                 best_metric = current_metric
                 best_param = param
@@ -531,7 +541,7 @@ class Train(object):
             assert sum([x[0] for x in self.clf[0].classes_]) == 0, "all index 1 should correspond to 1"
             return res
 
-    def _cross_validate(self):
+    def _cross_validate(self, target_metric=None):
         """
         If we are performing event-wise training, we need to return the metrics for each running (event).
         Note: If you want to get more balanced k-fold split, you can refer to `proba_mass_split` in utils.py,
@@ -539,6 +549,9 @@ class Train(object):
 
         For 2018 task, which uses any-type evaluation, you can use
             metric_results = utils.evaluate_any_type(y_test, y_predict, self.id2label)
+
+        :param
+            target_metric: If specified, it is the target metric that we care about during hyper-parameter tunining.
         :return:
         """
         print_to_log('Use {} fold cross validation'.format(self.args.cv_num))
@@ -566,7 +579,6 @@ class Train(object):
             print_to_log('The average {0} score is {1}'.format(metric_name, metric_weighted_avg[metric_name]))
 
         if self.args.search_best_parameters:
-            target_metric = 'high_prior_f1'
             return metric_weighted_avg[target_metric]
 
         return {metric_name: metric_weighted_avg[metric_name] for metric_name in self.metric_names}, dev_predict

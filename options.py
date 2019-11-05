@@ -24,7 +24,7 @@ def get_arguments():
                         help="Number of iterations to do random search (each iteration train a set of parameters)")
     parser.add_argument("--search_by_sklearn_api", action='store_true',
                         help="Use the sklearn API (GridSearchCV and RandomSearchCV)")
-    parser.add_argument("--search_print_interval", type=int, default=20,
+    parser.add_argument("--search_print_interval", type=int, default=3,
                         help="As random forest has much longer training time, suggested value is 3, and nb can use 20")
     parser.add_argument("--search_skip", type=int, default=0,
                         help="Skip some search (because some parameters have been searched in previous running)")

@@ -150,12 +150,16 @@ def check_args_conflict(args):
                                          "directly apply the event-wise setting with the best parameter."
         assert args.search_by_sklearn_api is False, "Please use our own method instead of the sklearn API."
     if args.class_weight_scheme == 'customize':
-        assert args.model == 'rf', "We only support random forest for customized weight"
+        assert args.model == 'rf', "We only support rf for customized weight, because all other models need to be" \
+                                   "wrapped with OneVsRestClassifier, which is not compatible with customized" \
+                                   "class_weight in current sklearn version."
 
     if args.merge_priority_score != 'simple':
         assert args.merge_priority_score == 'advanced'
         assert args.train_regression, "The advanced method must use both regression and prediction."
         assert 0.0 <= args.advanced_predict_weight <= 1.0
+    if args.sanity_check:
+        args.n_jobs = 1
 
 
 def get_class_weight(args, label2id: Dict[str, int], id2label: List[str], formal_train_file: str) -> List[float]:
