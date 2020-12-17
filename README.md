@@ -342,138 +342,6 @@ When we use the KFold of sklearn, we get the weighted average ratio around `3.95
 When we implement the stratified K-fold based on a paper published on 2011, the ratio is around `4.00`.
 It means the stratified method is really better than K-folder, but the difference is not so obvious.
 
-## 2019-B Todo
-- Adjust parameters for type classification according to the new evaluation script.
-For example, use class_weight_scheme == 'customize' which gives more weights to actionable classes.
-And the additional weights added in the customized class weights could also be tuned.
-- [done] Regression to get priority score.
-- Classification to get priority score (give more weights to the high priority).
-- Run the feature extraction tools again on all data (including 2019-B) and predict.
-- For regression, change it to classification and give higher weights to high priority.
-
-** Some Experimental Results **
-Use random forest (customized weight).
-
-When >0.7 copy class score, otherwise average regression score and class score (already better than most teams).
-```
-Priority Estimation Error (mean squared error, macro): 0.06123941348506185
-Priority Estimation Error High Importance (mean squared error, macro): 0.1381861719212382
-```
-
-When >0.7 copy class score, otherwise use regression score (almost the best among all teams).
-```
-Priority Estimation Error (mean squared error, macro): 0.053614565907744216
-Priority Estimation Error High Importance (mean squared error, macro): 0.105253727545082
-```
-
-When only use the class score (Simple method), and set additional_weight to 1.0 (quite good in all aspects)
-However, it actually has a bug, which is that some scores in submission file is larger than 1.0, and it "fools" the evaluation script.
-```
-High Importance Alert Worth: -0.16628242074927946
-Accumulated Alert Worth: -0.2589881529385931
-Information Type F1 (positive class, multi-type, macro): 0.1153338898176881
-High Importance Information Type F1 (positive class, multi-type, macro): 0.057893041357435455
-Priority Estimation Error (mean squared error, macro): 0.0848325638255392
-Priority Estimation Error High Importance (mean squared error, macro): 0.14055919115397889
-```
-
-When set additional_weight to 1.0, --train_regression
-```
-High Importance Alert Worth: -0.9230547550432279
-Accumulated Alert Worth: -0.470109165374908
-Priority Estimation Error (mean squared error, macro): 0.07529813107453287
-Priority Estimation Error High Importance (mean squared error, macro): 0.1478957047061434
-```
-
-## 2019-A Todo
-- Submit four models: class_weight_scheme balanced/customize + pick up threshold / top 2
-- Round-trip translation / paraphrase (SemEval 2015 Task 1) to do data augmentation
-- First classify the higher level, and then classify the target (Request-GoodsService, Request-SearchAndRescue)
-- Use a better method to predict the importance score
-- Use generative model, try to model the joint distribution of p(x,y) and can extract the feature to feed into the descriptive model (similar to ELMo)
-- Borrow idea from Twitter Sentiment Analysis (including pre-processing methods)
-- Suggested by Xin: augment interest profile with calling Google API. By the way, remember to deduplicate the tweets (removing tweets of retweet and very similar tweets).
-- Relationship between events (domain adaption/shift)
-- Use time to predict the priority of tweets, and give high priority tweets more weights in train
-- Use indicator terms (such as forming a bag of words) in 2018 training data, because it is a quite important label provided by human labelers
-- Retrain skip-thought on additional data
-
-### May 14 Discussion
-
-Junpei:
-
-- [done] cope with rf class_weight (because in onevsrest setting there are only two classes)
-- Read new post in Google group about the importance of different categories
-- Check inference code of event-wise (and why the score always 0.04)
-- [done] Use class weight to retrain the model
-- Pick different thresholds for different classes
-
-### May 7 Discussion
-
-Junpei:
-
-- [done] Wait for 2019 test as well as metric release and adjust the model
-- [done] BERT use CLS and multi-layer
-
-### Apr 26 Discussion
-
-Junpei:
-
-- [done] Get event-wise result for random forest and XGBoost
-- [done] Get ensemble result (use **Weighted Majority Algorithm** as a simple baseline)
-
-### Apr18 Discussion
-
-Junpei:
-- [done] Implement a stratified sampling method for multi-label setting.
-- [done] Transfer the Parameter Search to sklearn API
-- [done] Try late fusion for current new parameters (not good)
-- [done] Normalization features before concatenate them
-- [done] Leave one out to select features (the `fasttext-tfidf` and `glove-avg` and `hashtag` are removed)
-- [done] Add models of linear svm and XGBoost
-- [half-done] Do model ensemble (Using Probabilities as Meta-Features)
-
-Xinyu:
-- plug fasttext trained on Twitter data
-- Add other handcrafted feature, read CBNU paper (last year first prize) and adopt some hand-crafted features
-- Temporal information feature
-- Additional data feature (from the additional data collected)
-- image feature classifier
-
-
-### Apr12 Discussion
-Junpei:
-- [done] Add Hashtag feature
-- [done] Event-wise model. By the way, the event of each test tweet will be informed, so we can manually choose classifier for each event
-- [done] Read paper "A SIMPLE BUT TOUGH-TO-BEAT BASELINE FOR SENTENCE EMBEDDINGS" and try the embedding of that method
-- [done] Tune models (random search hyper-parameters for nb and rf and (maybe) linear svm)
-
-Xinyu:
-- All things not done, move to 'Apr18 Discussion'
-
-### Mar29 Discussion
-
-Junpei:
-- [done] Cross-validation to see if it is comparable (question: Current evaluation is any-type, which means only require to have overlap with the test labels, how to perform it in cross-validation)
-- [done] To see if the additional test data added into training is helpful (if data is noisy)
-- [done] Late fusion (train model and then average, because different features may not in the same scale; However, for graph-based model such as NB the scale will not influence it)
-- [done] Check with host if additional data could be used
-- [done] Install the CUDA and other dependencies
-- [done] Add Glove to feature
-- [done] Use fasttext trained on other dataset (currently we use the fasttext trained by tweets provided by the host)
-
-Xinyu:
-- News extract feature
-- [done] Explore the data to see if the number of images is large enough and useful
-- [done] Manually check if data timestep contains useful information
-- [done] Natural Disaster Dataset. As shown in the TREC-IS official website, there are six general events: bombing, earthquake, flood, hurricane, wildfire, shooting. 
-The description of each type of general event could be found in its corresponding pdf ("Event Type Profiles" in [webpage](http://dcs.gla.ac.uk/~richardm/TREC_IS/)). 
-
-Bernie:
-- [done] Get computatioinal resource for this project
-- Check the correctness of get_clean_tweet in utils
-- Classifier part
-
 ## Demo for displaying tweets
 
 The `utils_display.py` provide tools to extract some tweets along with some information that could be displayed
@@ -483,6 +351,38 @@ Note that the `rf.run` in that script is the output file of our system, which is
 The demo is in another private repo `Display-Tweets`.
 
 ## Reference
+
+If you find this repo helpful, please consider citing our papers:
+```
+@inproceedings{hunag_icmr18,
+  author    = {Po{-}Yao Huang and
+               Junwei Liang and
+               Jean{-}Baptiste Lamare and
+               Alexander G. Hauptmann},
+  title     = {Multimodal Filtering of Social Media for Temporal Monitoring and Event
+               Analysis},
+  booktitle = {{ICMR}},
+  pages     = {450--457},
+  publisher = {{ACM}},
+  year      = {2018}
+}
+```
+and
+```
+@inproceedings{zhou_trec19,
+  author    = {Junpei Zhou and
+               Xinyu Wang and
+               Po{-}Yao Huang and
+               Alexander G. Hauptmann},
+  title     = {CMU-Informedia at {TREC} 2019 Incident Streams Track},
+  booktitle = {{TREC}},
+  series    = {{NIST} Special Publication},
+  volume    = {1250},
+  publisher = {National Institute of Standards and Technology {(NIST)}},
+  year      = {2019}
+}
+```
+
 
 Official Baseline system: https://github.com/cbuntain/trecis
 
