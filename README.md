@@ -354,21 +354,6 @@ The demo is in another private repo `Display-Tweets`.
 
 If you find this repo helpful, please consider citing our papers:
 ```
-@inproceedings{hunag_icmr18,
-  author    = {Po{-}Yao Huang and
-               Junwei Liang and
-               Jean{-}Baptiste Lamare and
-               Alexander G. Hauptmann},
-  title     = {Multimodal Filtering of Social Media for Temporal Monitoring and Event
-               Analysis},
-  booktitle = {{ICMR}},
-  pages     = {450--457},
-  publisher = {{ACM}},
-  year      = {2018}
-}
-```
-and
-```
 @inproceedings{zhou_trec19,
   author    = {Junpei Zhou and
                Xinyu Wang and
@@ -382,6 +367,22 @@ and
   year      = {2019}
 }
 ```
+and
+```
+@inproceedings{hunag_icmr18,
+  author    = {Po{-}Yao Huang and
+               Junwei Liang and
+               Jean{-}Baptiste Lamare and
+               Alexander G. Hauptmann},
+  title     = {Multimodal Filtering of Social Media for Temporal Monitoring and Event
+               Analysis},
+  booktitle = {{ICMR}},
+  pages     = {450--457},
+  publisher = {{ACM}},
+  year      = {2018}
+}
+```
+
 
 
 Official Baseline system: https://github.com/cbuntain/trecis
