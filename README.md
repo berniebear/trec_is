@@ -1,8 +1,5 @@
-## Multimodl Social Media Fitlering Project
-The is the codebase for the following two papers:
-1. "Multimodal Filtering of Social Media for Temporal Monitoring and Event Analysis", Po-Yao Huang, Junwei Liang, Jean-Baptiste Lamare, Alexander G Hauptmann, ICMR 2018.
-
-2. CMU-Informedia at TREC 2019 Incident Streams Track, Junpei Zhou Xinyu Wang, Po-Yao Huang, Alexander Hauptmann, TREC 2019.
+## TREC-IS
+TREC Incident Stream shared task (official website [here](http://dcs.gla.ac.uk/~richardm/TREC_IS/))
 
 ## Environment
 
