@@ -1,5 +1,5 @@
 ## TREC-IS
-TREC Incident Stream shared task (official website [here](http://dcs.gla.ac.uk/~richardm/TREC_IS/))
+CMU's solution for 2019 TREC Incident Stream shared task (official website [here](http://dcs.gla.ac.uk/~richardm/TREC_IS/))
 
 ## Environment
 
